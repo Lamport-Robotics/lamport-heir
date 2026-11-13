@@ -1,0 +1,30 @@
+[package]
+name = "heir-svm-tests"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97.1"
+publish = false
+description = "The built heir-claim program in LiteSVM: every instruction, with a clock the tests can move"
+
+# Standalone on purpose, as in lamport-vault: litesvm pulls its own solana crate set, which must not
+# mix with the program workspace's. The wire formats are rebuilt by hand in src/lib.rs, which also
+# makes this a second, independent statement of them.
+[workspace]
+resolver = "3"
+
+[dependencies]
+# `precompiles` loads the Ed25519 program, which init_plan reads proofs of control from.
+litesvm = { version = "=0.17.0", features = ["precompiles"] }
+solana-account = "4.3"
+solana-address = "2.7"
+solana-clock = "3.2"
+solana-instruction = "3.5"
+solana-instruction-error = "2.5"
+solana-keypair = "3.1"
+solana-message = "4.2"
+solana-signer = "3.0"
+solana-sysvar = "4.2"
+solana-system-interface = { version = "3.2", features = ["bincode"] }
+solana-transaction = "4.1"
+solana-transaction-error = "3.4"
+sha2 = "0.10"

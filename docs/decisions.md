@@ -34,6 +34,34 @@ Smaller choices made under the same instruction:
 - The repositories this one builds on are carried as git submodules pinned to one commit.
 - MIT license, as in the other Lamport repositories.
 
+## Milestone 1, the claim program
+
+Choices the spec did not make, taken while building it. [`claim-program.md`](claim-program.md)
+describes the result.
+
+- **The contingent heir's wait restarts when the primary heir claims.** The spec says the contingent
+  heir may claim "if the primary hasn't claimed within a year". Read literally, a primary who claimed
+  the SOL and then lost their key would leave a forgotten token stuck for ever, and a contingent heir
+  with no restart could take what a slow but living primary had not got to yet. With the restart, a
+  primary who is still claiming keeps the contingent heir out, and a primary who stops leaves the rest
+  to them after the delay.
+- **The contingent delay is at least 30 days and at most 100 years.** The spec gives a default of one
+  year and no bounds. A delay of zero would let both heirs race for the release.
+- **`init_plan` requires the vault to be an open vault of the Heir-enabled vault program.** A
+  mistyped vault address fails at once instead of producing a plan that can never activate.
+- **Tokens are claimed only into a token account the claiming heir owns.** The spec says heirs
+  withdraw "to their own address"; the program holds them to it.
+- **Closing a claimed token account is the caller's choice** (`close_account`), because Token-2022
+  refuses to close an account with withheld transfer fees. The tokens are never held hostage to the
+  close.
+- **A hashed heir is `sha256("lamport-heir/heir/v1" || salt || address)`** with a 32-byte salt, and
+  claims by passing the salt.
+- **The acceptance message is plain text naming the plan's address**, and is accepted bare or inside
+  an off-chain message envelope, so software and hardware wallets can both sign it.
+- **The claim program is built with `cargo build-sbf` and tested in LiteSVM**, as lamport-vault's
+  `execute_direct` tests are. It does not use the Anchor command-line tool; an IDL can be generated
+  later if a client wants one.
+
 ## Still the project owner's
 
 - Devnet keypairs and devnet deployment (milestone 4).
