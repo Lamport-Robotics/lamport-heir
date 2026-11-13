@@ -1,0 +1,3 @@
+[submodule "vendor/lamport-vault"]
+	path = vendor/lamport-vault
+	url = https://github.com/Lamport-Robotics/lamport-vault
