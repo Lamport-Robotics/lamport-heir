@@ -305,9 +305,27 @@ The protection against a coerced or tricked change is real, and it is better tha
 newly named heir can receive nothing for `window + wait` after the change, 425 days by default, the
 change is public, and every channel and contact is alerted. It comes from the clock, not the queue.
 
+A model of the two variants agrees. [`docs/models/queue_vs_immediate.py`](models/queue_vs_immediate.py)
+drives a queued and an immediate version of the rules with the same random sequences of plan
+changes, signed actions, check-ins, extensions, starts and executes, and compares the result of
+every event and the earliest release reachable afterwards. Over 200 000 sequences of the spec as
+written it finds no difference. With a window allowed below the queue's length it finds tens of
+thousands, so it can see one.
+
 What the queue adds is a "pending until" date for the app to show. What it costs is state, a lazy
-apply step in every instruction, and rules with a hole in them: clearing is immediate and so is
-arming an unarmed vault, so clear-then-arm skips the queue entirely.
+apply step in every instruction, and rules that are easy to get wrong where the spec is silent.
+
+Two of those are variants in the model, and each changes outcomes:
+
+- Clearing must also drop a queued change, or the vault re-arms itself a month later.
+- Key changes must not ride the queue, or a stolen check-in key keeps working for a month.
+
+Two more are traps the queue sets for owners and clients:
+
+- A `SetSuccession` carries a whole plan. A client that builds one from the plan in force, say to
+  lengthen the window ten days after the heir was changed, restates the old heir and silently
+  cancels the queued one.
+- Clearing is immediate and so is arming an unarmed vault, so clear-then-arm skips the queue.
 
 The choices:
 
@@ -555,11 +573,14 @@ link.
 None of these is a vulnerability; they are corners Heir has to handle or report.
 
 - **Transfer-fee tokens and `sweep_closed`.** `sweep_closed` moves the balance and then closes the
-  vault's token account. Token-2022 refuses to close an account that still holds withheld transfer
-  fees, so for a vault account that ever received such a token the whole instruction should fail
-  until someone runs the permissionless harvest. Expected from the token program's rules, not yet
-  run; the per-extension tests will confirm it, and the finisher and claim script will harvest
-  first.
+  vault's token account. Token-2022's `CloseAccount` refuses an account that still holds withheld
+  transfer fees (`AccountHasWithheldTransferFees`,
+  [`processor.rs`](https://github.com/solana-program/token-2022/blob/main/program/src/processor.rs),
+  [`transfer_fee/mod.rs`](https://github.com/solana-program/token-2022/blob/main/interface/src/extension/transfer_fee/mod.rs)),
+  and it refuses one with a confidential balance the same way. So for a vault account that ever
+  received a fee-bearing token, the sweep should fail until someone runs `HarvestWithheldTokensToMint`,
+  which needs no signer. That is read from the token program's source, not yet run here; the
+  per-extension tests will run it, and the finisher and claim script will harvest first.
 - **Closing a small vault to an empty address.** An H5 vault holding nothing above its rent pays out
   313 200 lamports on `Close`, less than the 890 880 a new system account needs, so the transaction
   fails until the destination is funded. With the succession block the payout is always above the
