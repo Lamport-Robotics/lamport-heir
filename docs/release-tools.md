@@ -97,9 +97,10 @@ What the tool says for tokens it cannot move comes from the token program's own 
 | the token's issuer has paused all transfers | it moves once the issuer resumes |
 | the receiving account requires a memo | the heir switches that setting off and runs the claim again |
 
-Two cases it handles without being asked: an account with **withheld transfer fees** cannot be
-closed, so the tool harvests the fees to the mint (which anyone may do) in the same transaction;
-and a mint with a **transfer hook** gets the hook's extra accounts passed along.
+One case it handles without being asked: an account with **withheld transfer fees** cannot be
+closed, so the tool harvests the fees to the mint (which anyone may do) in the same transaction.
+Tokens of a mint with a **transfer hook** are not moved yet: they are reported and left where they
+are.
 
 ### The heir's key
 
@@ -167,9 +168,8 @@ nothing else back.
 
 ## What is not done
 
-- **A working transfer hook has not been run.** The code passes a hook's accounts along, and a
-  missing hook program fails cleanly (the vault's tests). A sweep through a live hook needs a hook
-  program to test against.
+- **Tokens with a transfer hook are not moved.** They are reported and stay where they are.
+  Moving them needs a hook program to test against, and has not been built.
 - **Hardware and phone wallets** claim through the page in milestone 4, not through this tool.
 - **The finisher asks again every pass about a token that cannot move.** That costs RPC calls, not
   fees.

@@ -81,8 +81,10 @@ Creates the plan. Anyone may pay.
   vault program cannot tell a plan that was never created from a wallet that was never used, so a
   vault can be armed to a plan's address with no plan there, and would then release to an address
   no key controls. The owner signed for that address, and only these terms produce it, so the plan
-  may be created late: by anyone who knows the terms, with the heirs proving control as always.
-  A vault that released anywhere else lets no plan be created for it.
+  may be created late, by anyone who knows the terms. No heir has to prove control then: a proof
+  guards against naming an address nobody controls before funds depend on it, and here the funds
+  are already there. Demanding one would let a primary heir who can no longer sign keep the
+  contingent heir out. A vault that released anywhere else lets no plan be created for it.
 - **Every heir named by address must prove they control it.** Either is enough:
   1. They sign this transaction, as the payer or as an extra account.
   2. The transaction carries an instruction for Solana's Ed25519 program that verified their

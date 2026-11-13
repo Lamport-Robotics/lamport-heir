@@ -217,12 +217,16 @@ fn a_vault_armed_to_a_plan_nobody_created_can_still_be_claimed() {
     // never created from a wallet that was never used. If that happens, the release lands at an
     // address no key controls. The claim program lets the plan be created afterwards, because the
     // vault's tombstone names exactly that address, and only these terms produce it.
+    //
+    // The primary heir here is gone too: nobody holds that key any more. The contingent heir must
+    // still be able to get the plan created and, after their delay, claim.
     let mut b = Bench::new();
     b.svm.add_program_from_file(claim::CLAIM_PROGRAM_ID, claim::SO).unwrap();
-    let primary = Keypair::new();
-    b.svm.airdrop(&primary.pubkey(), 1_000_000_000).unwrap();
+    let lost_primary = Keypair::new().pubkey();
+    let contingent = Keypair::new();
+    b.svm.airdrop(&contingent.pubkey(), 1_000_000_000).unwrap();
     let vault = b.vault;
-    let terms = claim::Terms { vault, primary: claim::HeirRef::address(&primary.pubkey()), contingent: claim::HeirRef::none(), contingent_delay_secs: 0 };
+    let terms = claim::Terms { vault, primary: claim::HeirRef::address(&lost_primary), contingent: claim::HeirRef::address(&contingent.pubkey()), contingent_delay_secs: YEAR as u64 };
     let plan = terms.plan();
     assert!(b.account(&plan).is_none(), "the plan was never created");
 
@@ -238,19 +242,23 @@ fn a_vault_armed_to_a_plan_nobody_created_can_still_be_claimed() {
 
     // nothing can be activated or claimed yet
     assert!(b.send(&[claim::activate_ix(&plan, &vault)], &[]).is_err());
-    assert!(b.send(&[claim::claim_sol_ix(&plan, &primary.pubkey(), None)], &[&primary]).is_err());
+    assert!(b.send(&[claim::claim_sol_ix(&plan, &contingent.pubkey(), None)], &[&contingent]).is_err());
 
-    // The plan is created now, by anyone who knows its terms; the heir proves control as always.
+    // The plan is created now, by anyone who knows its terms. Nobody has to prove anything: the
+    // primary heir cannot, and must not be able to keep the contingent heir out by being gone.
     let payer = b.payer.pubkey();
-    assert_eq!(claim::custom(b.send(&[claim::init_plan_ix(&payer, &terms, &[])], &[]).unwrap_err()), claim::err::HEIR_NOT_PROVEN);
-    b.send(&[claim::init_plan_ix(&payer, &terms, &[primary.pubkey()])], &[&primary]).expect("init_plan after the release");
+    b.send(&[claim::init_plan_ix(&payer, &terms, &[])], &[]).expect("init_plan after the release, with no heir signing");
     // What was released is all still there; the plan's own rent came out of it.
     assert_eq!(b.balance(&plan), payout);
 
     b.send(&[claim::activate_ix(&plan, &vault)], &[]).expect("activate");
-    let before = b.balance(&primary.pubkey());
-    b.send(&[claim::claim_sol_ix(&plan, &primary.pubkey(), None)], &[&primary]).expect("claim_sol");
-    assert_eq!(b.balance(&primary.pubkey()), before + payout - b.rent(claim::PLAN_SPACE));
+    let activated = b.now();
+    b.set_time(activated + YEAR - 1);
+    assert_eq!(claim::custom(b.send(&[claim::claim_sol_ix(&plan, &contingent.pubkey(), None)], &[&contingent]).unwrap_err()), claim::err::CONTINGENT_TOO_EARLY);
+    b.set_time(activated + YEAR);
+    let before = b.balance(&contingent.pubkey());
+    b.send(&[claim::claim_sol_ix(&plan, &contingent.pubkey(), None)], &[&contingent]).expect("the contingent heir claims");
+    assert_eq!(b.balance(&contingent.pubkey()), before + payout - b.rent(claim::PLAN_SPACE));
 }
 
 #[test]
