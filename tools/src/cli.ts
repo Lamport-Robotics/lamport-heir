@@ -8,6 +8,8 @@
  *   claim    <vault or plan> --keypair FILE       everything `finish` does, then withdraw as the heir
  *   kit      <vault> --heir ADDRESS               print an heir's claim kit (an HTML page) for an armed vault
  *   finisher --keypair FILE                       keep finishing every vault that is due
+ *   pincer-arm    <vault>                         on the robot: arm Pincer1's own switch to match the vault's plan
+ *   pincer-status <vault>                         on the robot: compare what was armed with the robot and the chain
  *
  * Common options:  --rpc URL   any Solana RPC endpoint (default: $LAMPORT_HEIR_RPC, else devnet)
  *                  --dry-run   ask the cluster what would happen and send nothing
@@ -15,13 +17,17 @@
  * A key file is a Solana CLI keypair file. It is read to sign and pay fees; it is never printed,
  * copied or sent. The tool never asks for a seed phrase, and has no option that takes one.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { type Chain, COMMITMENT } from "./chain.ts";
 import { claim, type ClaimVerdict } from "./claiming.ts";
 import { contingentOpensAt, type HeirRef } from "./claim.ts";
 import { Finisher } from "./finisher.ts";
 import { parseSalt, renderKit } from "./kit.ts";
+import { RobotDaemon } from "./pincer/daemon.ts";
+import { arm as armRobot, type ArmRecord, drift, type RobotPlan } from "./pincer/link.ts";
 import { PROGRAMS, SHORT_CLOCKS_PROGRAMS } from "./programs.ts";
 import { describeStep, finish, inspect, type Situation, start, type Step } from "./release.ts";
 import { holdingsOf } from "./tokens.ts";
@@ -37,7 +43,7 @@ export interface Args {
   flags: Map<string, string | true>;
 }
 
-const VALUE_FLAGS = new Set(["rpc", "keypair", "salt", "salt-file", "heir", "label", "out", "cluster", "interval", "max-new-token-accounts", "commit"]);
+const VALUE_FLAGS = new Set(["rpc", "keypair", "salt", "salt-file", "heir", "label", "out", "cluster", "interval", "max-new-token-accounts", "commit", "daemon", "nonce-account", "mints", "record"]);
 const BOOLEAN_FLAGS = new Set(["dry-run", "once", "short-clocks", "help"]);
 
 /** Splits a command line into the command, its positional arguments and its `--flags`. */
@@ -217,6 +223,12 @@ const HELP = `lamport-heir: collect what a Lamport Vault leaves its heirs, with 
   finisher --keypair FILE [--interval SECONDS] [--once] [--max-new-token-accounts N] [--short-clocks]
                                            keep finishing every vault that is due
 
+  On the robot's own computer, for a Pincer1 (they talk to its daemon on 127.0.0.1 and need no key):
+  pincer-arm    <vault> [--heir ADDRESS] [--mints MINT,MINT] [--nonce-account ADDRESS]
+                                           arm the robot's own switch to match the vault's plan;
+                                           you confirm with a three-second hold on the robot
+  pincer-status <vault>                    compare what was armed with the robot and the chain
+
   --rpc URL    a Solana RPC endpoint (default: $LAMPORT_HEIR_RPC, else ${DEVNET})
   --dry-run    ask the cluster what would happen; send nothing
 
@@ -228,6 +240,8 @@ export interface Io {
   env: Record<string, string | undefined>;
   /** stands in for the cluster in tests */
   chain?: Chain;
+  /** stands in for the robot's daemon in tests */
+  daemon?: RobotDaemon;
   signal?: AbortSignal;
 }
 
@@ -323,6 +337,56 @@ export async function main(argv: string[], io: Io): Promise<number> {
       }
       await finisher.run(seconds * 1000, io.signal ?? new AbortController().signal);
       return 0;
+    }
+    case "pincer-arm":
+    case "pincer-status": {
+      const s = await inspect(chain, address(args.positional[0], "the vault address"));
+      const daemonFlag = args.flags.get("daemon");
+      const daemon = io.daemon ?? new RobotDaemon(typeof daemonFlag === "string" ? daemonFlag : undefined);
+      const recordFlag = args.flags.get("record");
+      const recordPath = typeof recordFlag === "string" ? recordFlag : join(io.env.HOME ?? homedir(), ".lamport-heir", `pincer-${s.vault.toBase58()}.json`);
+      // The robot pays the primary heir's own address: the plan's primary heir when it is named, or
+      // the address the vault releases to when that is a plain address. A private heir is not on
+      // chain, so the owner has to give the address.
+      const heirFlag = args.flags.get("heir");
+      const named = s.plan?.account.terms.primary.kind === "address" ? s.plan.account.terms.primary.address : !s.plan && s.claim ? s.claim : undefined;
+      const heir = typeof heirFlag === "string" ? address(heirFlag, "--heir ADDRESS") : named;
+      if (s.state !== "open" || !s.succession || !s.claim) throw new UsageError("the robot's switch is armed to match an open vault that has a succession plan");
+      if (!heir) throw new UsageError("the plan keeps its primary heir private: pass their own address with --heir ADDRESS");
+      const mintsFlag = args.flags.get("mints");
+      const plan: RobotPlan = {
+        heir,
+        windowDays: Number(s.succession.windowSecs / s.programs.daySecs),
+        waitDays: Number(s.succession.waitSecs / s.programs.daySecs),
+        mints: typeof mintsFlag === "string" ? mintsFlag.split(",").filter(Boolean).map((m) => address(m, "a mint in --mints")) : [],
+      };
+      if (args.command === "pincer-arm") {
+        const nonceFlag = args.flags.get("nonce-account");
+        io.out(`asking the robot to arm its switch: ${plan.windowDays + plan.waitDays} days without a touch, then its wallet goes to ${heir.toBase58()}.`);
+        io.out("The robot will say what it is about to arm. Hold your hand on it for three seconds to confirm.");
+        const res = await armRobot(daemon, chain, plan, typeof nonceFlag === "string" ? { nonceAccount: address(nonceFlag, "--nonce-account ADDRESS") } : {});
+        if (!res.ok) {
+          io.out(`the robot answered: ${res.reason}`);
+          return 1;
+        }
+        mkdirSync(dirname(recordPath), { recursive: true });
+        writeFileSync(recordPath, `${JSON.stringify(res.record, null, 2)}\n`, { mode: 0o600 });
+        io.out(`armed. The robot said: ${res.record.summary}`);
+        io.out(`what was armed is recorded in ${recordPath} (no secret is in it).`);
+        io.out("A touch on the robot resets its timer. It is not a check-in for the vault, and a check-in is not a touch.");
+        if (s.plan && s.plan.account.terms.contingent.kind !== "none") io.out("The robot pays the primary heir only: the contingent heir does not cover the robot's wallet.");
+        return 0;
+      }
+      if (!existsSync(recordPath)) throw new UsageError(`there is no record of an arming at ${recordPath}: run pincer-arm first, or pass --record FILE`);
+      const record = JSON.parse(readFileSync(recordPath, "utf8")) as ArmRecord;
+      const d = await drift(daemon, chain, record, plan);
+      io.out(d.robot.armed ? `the robot reports its switch armed: ${d.robot.inactivityDays} days, ${d.daysLeft.toFixed(1)} left, heir ${d.robot.heir}` : "the robot reports that its switch is not armed");
+      if (d.problems.length === 0) {
+        io.out("everything is as it was armed, and it matches the vault's plan.");
+        return 0;
+      }
+      for (const p of d.problems) io.out(`- ${p}`);
+      return 1;
     }
     default:
       throw new UsageError(`unknown command: ${args.command}`);

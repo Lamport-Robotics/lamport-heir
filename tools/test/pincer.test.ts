@@ -35,13 +35,14 @@ function tokenData(mint: PublicKey, holder: PublicKey, amount: bigint): Uint8Arr
 }
 
 /** The daemon's three routes, as a stand-in that records what it was asked. */
-function robot(over: { status?: Record<string, unknown>; armAnswer?: { status: number; body: unknown }; nonce?: { status: number; body: unknown } } = {}) {
+function robot(over: { status?: Record<string, unknown>; armAnswer?: { status: number; body: unknown }; nonce?: { status: number; body: unknown }; wallet?: PublicKey } = {}) {
   const calls: { method: string; path: string; body?: unknown }[] = [];
   const fetchImpl = async (url: string, init?: { method?: string; body?: string }) => {
     const path = new URL(url).pathname;
     calls.push({ method: init?.method ?? "GET", path, ...(init?.body ? { body: JSON.parse(init.body) } : {}) });
     const answer =
-      path === "/inheritance" ? { status: 200, body: over.status ?? { armed: true, inactivity_days: 425, days_since_touch: 3.5, heir: heir.toBase58() } }
+      path === "/status" ? { status: 200, body: { pubkey: (over.wallet ?? owner).toBase58() } }
+      : path === "/inheritance" ? { status: 200, body: over.status ?? { armed: true, inactivity_days: 425, days_since_touch: 3.5, heir: heir.toBase58() } }
       : path === "/inheritance/arm" ? (over.armAnswer ?? { status: 200, body: { ok: true, summary: "1.5 SOL to the heir after 425 days" } })
       : path === "/offline/nonce/create" ? (over.nonce ?? { status: 200, body: { nonceAccount: nonceAccount.toBase58(), signature: "sig" } })
       : { status: 404, body: {} };
@@ -68,7 +69,7 @@ describe("the link talks to the robot's own daemon and to nothing else", () => {
 
   it("has no way to clear or release the switch", () => {
     const methods = Object.getOwnPropertyNames(RobotDaemon.prototype).filter((m) => m !== "constructor" && m !== "call");
-    expect(methods.sort()).toEqual(["arm", "createNonceAccount", "switchStatus"]);
+    expect(methods.sort()).toEqual(["arm", "createNonceAccount", "switchStatus", "wallet"]);
   });
 });
 
@@ -95,7 +96,7 @@ describe("arming", () => {
     const { daemon, calls } = robot();
     const res = await arm(daemon, chainWith(), plan, { nonceAccount, now: new Date("2026-11-13T00:00:00Z") });
     expect(res.ok).toBe(true);
-    expect(calls).toEqual([{ method: "POST", path: "/inheritance/arm", body: { ...armBody(plan, nonceAccount), solLamports: "1500000000" } as ArmBody }]);
+    expect(calls).toEqual([{ method: "GET", path: "/status" }, { method: "POST", path: "/inheritance/arm", body: { ...armBody(plan, nonceAccount), solLamports: "1500000000" } as ArmBody }]);
     expect(res.ok && res.record).toEqual({
       version: 1,
       armedAt: "2026-11-13T00:00:00.000Z",
@@ -114,7 +115,7 @@ describe("arming", () => {
   it("asks the robot for a nonce account when none is given, and says why if the robot will not make one", async () => {
     const ok = robot();
     await arm(ok.daemon, chainWith(), plan);
-    expect(ok.calls.map((c) => c.path)).toEqual(["/offline/nonce/create", "/inheritance/arm"]);
+    expect(ok.calls.map((c) => c.path)).toEqual(["/offline/nonce/create", "/status", "/inheritance/arm"]);
     const off = robot({ nonce: { status: 403, body: { error: "offline_payments_disabled" } } });
     await expect(arm(off.daemon, chainWith(), plan)).rejects.toThrow(/offline-payments setting is off/);
     expect(off.calls.map((c) => c.path)).toEqual(["/offline/nonce/create"]);
@@ -125,11 +126,15 @@ describe("arming", () => {
     expect(await arm(daemon, chainWith(), plan, { nonceAccount })).toEqual({ ok: false, reason: "timeout" });
   });
 
-  it("refuses an address that is not a nonce account, and an heir that is the robot itself", async () => {
+  it("refuses, before the robot is asked to arm: no nonce account, one that answers to another key, the robot as its own heir", async () => {
     const { daemon, calls } = robot();
     await expect(arm(daemon, chainWith(), plan, { nonceAccount: pk(0x55) })).rejects.toThrow(/not a durable-nonce account/);
     await expect(arm(daemon, chainWith(), { ...plan, heir: owner }, { nonceAccount })).rejects.toThrow(/robot's own wallet/);
-    expect(calls).toEqual([]);
+    // The robot signs any durable-nonce transaction it is shown. One built on a nonce account that
+    // answers to another key could never run, so the link checks the authority against the robot's wallet.
+    const elsewhere = robot({ wallet: Keypair.generate().publicKey });
+    await expect(arm(elsewhere.daemon, chainWith(), plan, { nonceAccount })).rejects.toThrow(/does not answer to the wallet the robot reports.*could never run/);
+    for (const c of [...calls, ...elsewhere.calls]) expect(c.path).not.toBe("/inheritance/arm");
   });
 });
 
@@ -206,5 +211,77 @@ describe("the robot's own warnings reach the owner as reminders", () => {
     // the store learned nothing else from any of it
     expect(w.store.subs).toHaveLength(1);
     expect(await w.store.snapshot(pk(0x11).toBase58())).toBeUndefined();
+  });
+});
+
+// ---- the two commands, on the robot ----
+
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { emptySuccession, encodeVault } from "@lamport-robotics/vault";
+import { afterAll } from "vitest";
+import { encodePlanForTests } from "../scripts/claim-kat.ts";
+import { hashedHeir, planAddress, type Terms } from "../src/claim.ts";
+import { main, UsageError } from "../src/cli.ts";
+import { PROGRAMS } from "../src/programs.ts";
+
+describe("pincer-arm and pincer-status", () => {
+  const home = mkdtempSync(join(tmpdir(), "lamport-heir-robot-"));
+  afterAll(() => rmSync(home, { recursive: true, force: true }));
+  const vault = pk(0x11);
+  const DAY = 86_400n;
+  const H5 = Uint8Array.from([0, 0, 0, 5, 0, 0, 0, 3, ...new Uint8Array(48).fill(0xab)]);
+  const vaultData = (claim: PublicKey) =>
+    encodeVault({ version: 3, bump: 255, vaultId: new Uint8Array(32).fill(1), lmsPubkey: H5, spent: 0, generation: 0, createdSlot: 1n, succession: { ...emptySuccession(), claim, windowSecs: 365n * DAY, waitSecs: 60n * DAY, lastSignedTs: 1_800_000_000n }, used: new Uint8Array(4), usedKeys: [] });
+  const run = async (chain: FakeChain, daemon: RobotDaemon, ...argv: string[]) => {
+    const lines: string[] = [];
+    const code = await main(argv, { out: (l) => lines.push(l), env: { HOME: home }, chain, daemon });
+    return { code, text: lines.join("\n") };
+  };
+
+  it("arm for the plan's named primary heir, record it, and report no drift", async () => {
+    const terms: Terms = { vault, primary: { kind: "address", address: heir }, contingent: { kind: "address", address: Keypair.generate().publicKey }, contingentDelaySecs: 365n * DAY };
+    const chain = chainWith();
+    chain.put(vault, PROGRAMS.vault, vaultData(planAddress(terms)));
+    chain.put(planAddress(terms), PROGRAMS.claim, encodePlanForTests({ bump: 255, terms, createdTs: 1n, activated: false, activatedTs: 0n, closedSlot: 0n, contingentClockTs: 0n }));
+    const { daemon, calls } = robot();
+
+    const armed = await run(chain, daemon, "pincer-arm", vault.toBase58(), "--nonce-account", nonceAccount.toBase58(), "--mints", mintA.toBase58());
+    expect(armed.code).toBe(0);
+    expect(armed.text).toContain(`425 days without a touch, then its wallet goes to ${heir.toBase58()}`);
+    expect(armed.text).toContain("Hold your hand on it for three seconds");
+    expect(armed.text).toContain("not a check-in for the vault");
+    expect(armed.text).toContain("contingent heir does not cover the robot's wallet");
+    expect(calls.at(-1)).toMatchObject({ path: "/inheritance/arm", body: { heir: heir.toBase58(), inactivityDays: 425 } });
+    const file = join(home, ".lamport-heir", `pincer-${vault.toBase58()}.json`);
+    const record = JSON.parse(readFileSync(file, "utf8"));
+    expect(record).toMatchObject({ heir: heir.toBase58(), inactivityDays: 425, owner: owner.toBase58() });
+    expect(JSON.stringify(record)).not.toMatch(/secret|private/i);
+
+    const status = await run(chain, daemon, "pincer-status", vault.toBase58());
+    expect(status.code).toBe(0);
+    expect(status.text).toContain("everything is as it was armed");
+
+    // the robot's wallet gains a token nobody armed: said, and the exit code says so
+    chain.put(pk(0x90), TOKEN_PROGRAM_ID, tokenData(mintB, owner, 3n));
+    const drifted = await run(chain, daemon, "pincer-status", vault.toBase58(), "--mints", mintA.toBase58());
+    expect(drifted.code).toBe(1);
+    expect(drifted.text).toContain("1 kind(s) of token the stored transaction does not send");
+  });
+
+  it("asks for the heir's address when the plan keeps it private, and refuses a vault with no plan", async () => {
+    const terms: Terms = { vault, primary: hashedHeir(new Uint8Array(32).fill(5), heir), contingent: { kind: "none" }, contingentDelaySecs: 0n };
+    const chain = chainWith();
+    chain.put(vault, PROGRAMS.vault, vaultData(planAddress(terms)));
+    chain.put(planAddress(terms), PROGRAMS.claim, encodePlanForTests({ bump: 255, terms, createdTs: 1n, activated: false, activatedTs: 0n, closedSlot: 0n, contingentClockTs: 0n }));
+    const { daemon, calls } = robot();
+    await expect(run(chain, daemon, "pincer-arm", vault.toBase58(), "--nonce-account", nonceAccount.toBase58())).rejects.toThrow(/keeps its primary heir private.*--heir/);
+    expect((await run(chain, daemon, "pincer-arm", vault.toBase58(), "--nonce-account", nonceAccount.toBase58(), "--heir", heir.toBase58(), "--record", join(home, "r.json"))).code).toBe(0);
+
+    chain.put(vault, PROGRAMS.vault, vaultData(PublicKey.default));
+    await expect(run(chain, daemon, "pincer-arm", vault.toBase58())).rejects.toThrow(UsageError);
+    await expect(run(chain, daemon, "pincer-status", pk(0x12).toBase58())).rejects.toThrow(/no account at/);
+    expect(calls.filter((c) => c.path === "/inheritance/arm")).toHaveLength(1);
   });
 });

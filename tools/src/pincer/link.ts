@@ -97,7 +97,11 @@ export async function arm(daemon: RobotDaemon, chain: Chain, plan: RobotPlan, op
   const body = armBody(plan, nonceAccount);
   const nonce = await readNonce(chain, nonceAccount);
   if (!nonce) throw new Error(`${nonceAccount.toBase58()} is not a durable-nonce account`);
-  const owner = nonce.authority;
+  // The robot signs whatever durable-nonce transaction it is shown. If the nonce account answered
+  // to another key, the transaction it kept could never run, and nobody would know until the day
+  // it mattered. So this is checked here, before the robot is asked.
+  const owner = new PublicKey(await daemon.wallet());
+  if (!nonce.authority.equals(owner)) throw new Error(`the nonce account ${nonceAccount.toBase58()} does not answer to the wallet the robot reports: a transaction built on it could never run`);
   if (owner.equals(plan.heir)) throw new Error("the heir is the robot's own wallet");
 
   // What the stored transaction will move, read the way the robot reads it, for the record.

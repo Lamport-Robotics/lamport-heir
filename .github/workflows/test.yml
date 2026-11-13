@@ -11,9 +11,11 @@ name: test
 # tools    the finisher, the claim tool and the claim kit: types, unit tests, and the single-file
 #          build of the command-line tool, whose sha256 is printed.
 # e2e      a local validator with both `short-clocks` test builds: four vaults armed, left silent,
-#          released and claimed with nothing but the tools, over the validator's RPC.
+#          released and claimed with nothing but the tools, over the validator's RPC; and the
+#          Pincer1 link against Pincer1's own daemon in simulator mode.
 #
-# The vault comes from vendor/lamport-vault, a submodule pinned to one commit.
+# The vault comes from vendor/lamport-vault and the robot's daemon from vendor/pincer1, submodules
+# pinned to one commit each.
 
 on:
   push:
@@ -236,6 +238,13 @@ jobs:
       - name: Build the programs
         working-directory: tools
         run: npm run build:programs
+
+      # Pincer1's daemon, from the pinned submodule, unmodified: the Pincer1 link is tested against it.
+      - name: Install the Pincer1 daemon's dependencies
+        working-directory: vendor/pincer1/daemon
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Release, end to end
         working-directory: tools

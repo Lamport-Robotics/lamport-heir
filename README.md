@@ -20,6 +20,7 @@ this repository is audited.
 - The claim program: [`docs/claim-program.md`](docs/claim-program.md)
 - Finishing a release and claiming it, the finisher, the claim tool and the claim kit:
   [`docs/release-tools.md`](docs/release-tools.md)
+- The Pincer1 link: [`docs/pincer-link.md`](docs/pincer-link.md)
 - The vault side lives in lamport-vault as the `succession` cargo feature, merged in
   [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5); its reference is
   [`docs/SUCCESSION.md`](https://github.com/Lamport-Robotics/lamport-vault/blob/main/docs/SUCCESSION.md)
@@ -31,6 +32,7 @@ tools/                the finisher, the claim tool and the claim kit (TypeScript
 tests/svm             the built programs in LiteSVM, with a clock the tests can move
 kat/                  byte layouts shared by the program and the tools
 vendor/lamport-vault  lamport-vault, pinned to one commit (a git submodule)
+vendor/pincer1        pincer1, pinned and read-only, for the tests of the Pincer1 link
 docs/                 design note, decisions, the claim program, the tools, program ids, models
 ```
 
@@ -58,7 +60,7 @@ The tools have their own set-up and tests, an end-to-end run on a local validato
 | M2 | Heir-enabled vault: succession state, `SetSuccession`, check-ins, the waiting period, release | merged |
 | M3 | permissionless finisher, claim command-line tool, printable claim kit | merged |
 | M4 | app and reminder service | in progress |
-| M5 | Pincer1 link | not started |
+| M5 | Pincer1 link | in review |
 | M6 | audit preparation | not started |
 
 ## Rules this is built under

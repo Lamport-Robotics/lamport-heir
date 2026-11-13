@@ -1,7 +1,8 @@
 /**
- * The part of Pincer1's daemon the Heir link talks to. Three calls, all of them routes the daemon
- * already has and serves only to callers on the robot itself:
+ * The part of Pincer1's daemon the Heir link talks to. Four calls, all of them routes the daemon
+ * already has; the last three it serves only to callers on the robot itself:
  *
+ *   GET  /status                read for one thing: the address of the robot's wallet
  *   GET  /inheritance           what the robot's switch reports
  *   POST /inheritance/arm       ask the robot to arm it; the owner confirms with a three-second hold
  *   POST /offline/nonce/create  have the robot make the durable-nonce account the switch needs
@@ -54,6 +55,13 @@ export class RobotDaemon {
     const res = await this.fetchImpl(`${this.base}${path}`, { method, ...(body !== undefined ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}) });
     const parsed = (await res.json().catch(() => ({}))) as unknown;
     return { status: res.status, body: typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {} };
+  }
+
+  /** The address of the robot's wallet, as the robot reports it. */
+  async wallet(): Promise<string> {
+    const { status, body } = await this.call("GET", "/status");
+    if (status !== 200 || typeof body.pubkey !== "string") throw new Error(`the robot did not report its wallet (HTTP ${status})`);
+    return body.pubkey;
   }
 
   /** What the robot reports about its switch, as it reports it. */
