@@ -1,10 +1,19 @@
 name: test
 
-# rust   the claim program's unit tests on the host: terms, the tombstone reader, proofs of control,
-#        who may claim and when.
-# svm    the program built for Solana (agave 2.3.13, platform-tools v1.56: the pins lamport-vault
-#        builds with) and run in LiteSVM, where the tests can move the clock: every instruction,
-#        every refusal, and random sequences against a model of the rules.
+# rust     the claim program's unit tests on the host: terms, the tombstone reader, proofs of control,
+#          who may claim and when, and the byte layouts shared with the TypeScript client
+#          (kat/claim_encoding.json). Once more as the `short-clocks` test build.
+# svm      both programs built for Solana (agave 2.3.13, platform-tools v1.56: the pins
+#          lamport-vault builds with) and run in LiteSVM, where the tests can move the clock: every
+#          instruction of the claim program, every refusal, random sequences against a model of
+#          the rules, and the real Heir-enabled vault releasing into a real plan (tests/release.rs).
+# mutants  breaks the claim program one way at a time; a test must notice each time.
+# tools    the finisher, the claim tool and the claim kit: types, unit tests, and the single-file
+#          build of the command-line tool, whose sha256 is printed.
+# e2e      a local validator with both `short-clocks` test builds: four vaults armed, left silent,
+#          released and claimed with nothing but the tools, over the validator's RPC.
+#
+# The vault comes from vendor/lamport-vault, a submodule pinned to one commit.
 
 on:
   push:
@@ -31,13 +40,17 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo test --workspace --locked
+      # the test build for devnet, in which a day lasts a second: other ids, the same rules
+      - run: cargo test --workspace --locked --features heir-claim/short-clocks
 
   svm:
-    name: heir-claim in litesvm
+    name: both programs in litesvm
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
 
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10, toolchain: stable
         with:
@@ -50,32 +63,14 @@ jobs:
           workspaces: |
             . -> target
             tests/svm -> target
+            vendor/lamport-vault -> target
           cache-targets: true
 
-      - name: Cache platform-tools and the SBF toolchain
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: ./.github/actions/solana-tools
         with:
-          path: ~/.cache/solana
-          key: platform-tools-${{ env.PLATFORM_TOOLS }}-${{ runner.os }}
-          restore-keys: |
-            platform-tools-${{ env.PLATFORM_TOOLS }}-
-
-      - name: Cache agave ${{ env.AGAVE_VERSION }}
-        id: agave-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.local/share/solana/install
-          key: agave-${{ env.AGAVE_VERSION }}-${{ runner.os }}
-
-      - name: Install agave ${{ env.AGAVE_VERSION }}
-        if: steps.agave-cache.outputs.cache-hit != 'true'
-        run: |
-          curl -sSfL "https://release.anza.xyz/v${AGAVE_VERSION}/install" -o /tmp/agave-install.sh
-          echo "${AGAVE_INSTALL_SHA256}  /tmp/agave-install.sh" | sha256sum -c -
-          sh /tmp/agave-install.sh
-
-      - name: Add agave to PATH
-        run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+          agave-version: ${{ env.AGAVE_VERSION }}
+          agave-install-sha256: ${{ env.AGAVE_INSTALL_SHA256 }}
+          platform-tools: ${{ env.PLATFORM_TOOLS }}
 
       - name: Check the toolchain pin
         run: |
@@ -84,10 +79,14 @@ jobs:
 
       - name: Build heir_claim.so
         run: |
-          cargo build-sbf --version
           cargo build-sbf --manifest-path programs/heir-claim/Cargo.toml -- --locked
-          ls -l target/deploy/heir_claim.so
           sha256sum target/deploy/heir_claim.so
+
+      # The Heir-enabled vault, from the pinned submodule, next to it: tests/release.rs runs the two together.
+      - name: Build lamport_vault.so with --features succession
+        run: |
+          cargo build-sbf --manifest-path vendor/lamport-vault/programs/lamport-vault/Cargo.toml --features succession --sbf-out-dir "$PWD/target/deploy" -- --locked
+          sha256sum target/deploy/lamport_vault.so
 
       # run from inside the crate: its rust-toolchain.toml pins the toolchain litesvm's agave crates need
       - name: cargo test (tests/svm)
@@ -102,6 +101,8 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
 
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10, toolchain: stable
         with:
@@ -114,32 +115,128 @@ jobs:
           workspaces: |
             . -> target
             tests/svm -> target
+            vendor/lamport-vault -> target
           cache-targets: true
 
-      - name: Cache platform-tools and the SBF toolchain
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: ./.github/actions/solana-tools
         with:
-          path: ~/.cache/solana
-          key: platform-tools-${{ env.PLATFORM_TOOLS }}-${{ runner.os }}
-          restore-keys: |
-            platform-tools-${{ env.PLATFORM_TOOLS }}-
+          agave-version: ${{ env.AGAVE_VERSION }}
+          agave-install-sha256: ${{ env.AGAVE_INSTALL_SHA256 }}
+          platform-tools: ${{ env.PLATFORM_TOOLS }}
 
-      - name: Cache agave ${{ env.AGAVE_VERSION }}
-        id: agave-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.local/share/solana/install
-          key: agave-${{ env.AGAVE_VERSION }}-${{ runner.os }}
-
-      - name: Install agave ${{ env.AGAVE_VERSION }}
-        if: steps.agave-cache.outputs.cache-hit != 'true'
-        run: |
-          curl -sSfL "https://release.anza.xyz/v${AGAVE_VERSION}/install" -o /tmp/agave-install.sh
-          echo "${AGAVE_INSTALL_SHA256}  /tmp/agave-install.sh" | sha256sum -c -
-          sh /tmp/agave-install.sh
-
-      - name: Add agave to PATH
-        run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      # The suite the mutants are run against includes tests/release.rs, which needs the vault. It is
+      # built once and never mutated; the script first requires the untouched suite to be green.
+      - name: Build lamport_vault.so with --features succession
+        run: cargo build-sbf --manifest-path vendor/lamport-vault/programs/lamport-vault/Cargo.toml --features succession --sbf-out-dir "$PWD/target/deploy" -- --locked
 
       - name: Mutation check
         run: python3 tests/mutants/run.py
+
+  tools:
+    name: tools (finisher, claim tool, claim kit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            tools/package-lock.json
+            vendor/lamport-vault/sdk/package-lock.json
+
+      - name: Build the vault SDK (from the pinned submodule)
+        working-directory: vendor/lamport-vault/sdk
+        run: npm ci --ignore-scripts && npm run build
+
+      - name: Install
+        working-directory: tools
+        run: npm ci --ignore-scripts
+
+      - name: Types and unit tests
+        working-directory: tools
+        run: npm run typecheck && npm test
+
+      # The vectors shared with the Rust crate must be the ones this code writes.
+      - name: kat/claim_encoding.json is current
+        working-directory: tools
+        run: npm run kat && git diff --exit-code -- ../kat
+
+      - name: The command-line tool as one file
+        working-directory: tools
+        run: |
+          npm run bundle
+          node dist/lamport-heir.mjs help
+          {
+            echo "### lamport-heir.mjs"
+            echo
+            echo '```'
+            echo "commit   $GITHUB_SHA"
+            echo "sha256   $(sha256sum dist/lamport-heir.mjs | cut -d' ' -f1)"
+            echo "size     $(wc -c < dist/lamport-heir.mjs) bytes"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lamport-heir-${{ github.sha }}
+          path: tools/dist/lamport-heir.mjs
+          if-no-files-found: error
+
+  e2e:
+    # A release from end to end on a local validator: tools/e2e/release.e2e.ts says what it covers.
+    name: release, end to end, on a local validator
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10, toolchain: stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          key: e2e
+          workspaces: |
+            . -> target
+            vendor/lamport-vault -> target
+          cache-targets: true
+
+      - uses: ./.github/actions/solana-tools
+        with:
+          agave-version: ${{ env.AGAVE_VERSION }}
+          agave-install-sha256: ${{ env.AGAVE_INSTALL_SHA256 }}
+          platform-tools: ${{ env.PLATFORM_TOOLS }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            tools/package-lock.json
+            vendor/lamport-vault/sdk/package-lock.json
+
+      - name: Build the vault SDK (from the pinned submodule)
+        working-directory: vendor/lamport-vault/sdk
+        run: npm ci --ignore-scripts && npm run build
+
+      - name: Install
+        working-directory: tools
+        run: npm ci --ignore-scripts
+
+      # both programs, as they are and as `short-clocks` test builds
+      - name: Build the programs
+        working-directory: tools
+        run: npm run build:programs
+
+      - name: Release, end to end
+        working-directory: tools
+        run: npm run e2e
