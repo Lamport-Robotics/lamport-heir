@@ -123,7 +123,10 @@ pub mod heir_claim {
     /// has already released to this very plan. Its owner signed for this address, and only these
     /// terms produce it, so creating the plan late gives nobody anything the owner did not sign
     /// for. Without it, a vault armed to a plan that was never created would release to an address
-    /// that could never be claimed from.
+    /// that could never be claimed from. In that state no heir has to prove anything: a proof
+    /// guards against naming an address nobody controls before funds depend on it, and here the
+    /// funds are already at the plan's address. Demanding one would let an heir who cannot sign
+    /// any more keep the other heir out, which is the case a contingent heir exists for.
     ///
     /// Every heir named by address must prove control (see [`proof`]): by signing this transaction
     /// (as the payer, or as any remaining account), or with an Ed25519 program instruction in this
@@ -141,7 +144,7 @@ pub mod heir_claim {
             let signed_this_transaction = ctx.accounts.payer.key() == address
                 || ctx.remaining_accounts.iter().any(|a| a.is_signer && a.key() == address);
             let proven = signed_this_transaction || proof::transaction_proves(&ctx.accounts.instructions, &address, &plan_key)?;
-            require!(proven, ClaimError::HeirNotProven);
+            require!(proven || released_to_this_plan, ClaimError::HeirNotProven);
         }
 
         let plan = &mut ctx.accounts.plan;

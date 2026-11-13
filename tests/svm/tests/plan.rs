@@ -325,9 +325,9 @@ fn a_plan_can_still_be_created_after_its_vault_released_to_it() {
     w.b.release_vault(&vault, &plan, 0);
     w.b.fund(&plan, 3_000_000_000); // what the vault released, sitting at the plan's address
 
-    // the heir still has to prove control, late or not
-    assert_eq!(custom(w.b.send(&[init_plan_ix(&payer, &t, &[])], &[]).unwrap_err()), err::HEIR_NOT_PROVEN);
-    w.b.send(&[init_plan_ix(&payer, &t, &[w.primary.pubkey()])], &[&w.primary]).expect("init_plan after the release");
+    // Anyone who knows the terms may create it now, and no heir has to sign: the funds are already
+    // at this address, so a proof could only keep somebody out.
+    w.b.send(&[init_plan_ix(&payer, &t, &[])], &[]).expect("init_plan after the release, by a stranger");
     let state = w.b.plan(&plan);
     assert!(!state.activated);
     assert_eq!(state.terms, t);
