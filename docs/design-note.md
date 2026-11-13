@@ -594,7 +594,18 @@ None of these is a vulnerability; they are corners Heir has to handle or report.
 
 - lamport-vault [pull request 4](https://github.com/Lamport-Robotics/lamport-vault/pull/4): the
   `succession` feature as an empty scaffold, the vault's suites running with it on and off, and the
-  job that compares the default build with the base. Its checks are the gate.
-- This note.
+  job that compares the default build with the base. All 18 checks pass at `0fb130d`:
+
+  | suite | default | with `succession` |
+  |---|---|---|
+  | `cargo test --workspace` | 65 passed, as on `main` | 66 passed |
+  | localnet suite | 42 passed, 2 skipped | 42 passed, 2 skipped |
+  | localnet suite with `small-history` | 44 passed | 44 passed |
+  | `execute_direct` in LiteSVM | 5 passed | 5 passed |
+
+  The two skipped tests need `small-history` and run in those legs. The gate built each program at
+  the pull request and at `main`: `lamport_vault.so` is `b9c055c3…2a563b` both times and
+  `pq_registry.so` is `95af8d50…22a118` both times, the hashes in `docs/VERIFY.md`.
+- This note, and the model behind section 4.4.
 
 Nothing in milestone 0 changes what any program does.
