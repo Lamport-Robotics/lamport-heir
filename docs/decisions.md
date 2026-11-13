@@ -108,6 +108,55 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   finisher's job, and a sweep through a working hook has not been run yet.
 - In every one of these cases the SOL and the other tokens are released as normal.
 
+## Milestone 3, the finisher, the claim tool and the kit
+
+[`release-tools.md`](release-tools.md) describes the result.
+
+- **The claim tool signs with a key file the heir points it at.** The spec gives it "the heir's
+  key". The tool reads a Solana CLI key file, signs, and keeps nothing; it has no option that takes
+  a key or a seed phrase, never prompts for one, and never prints or logs the file. An heir whose
+  key is in a hardware or phone wallet claims through the `/heir` page (milestone 4) instead.
+- **Opening a waiting period is its own command, run by a person.** `start` is separate from
+  `finish` and `claim`, and the finisher has no path to it. The spec's rule is that no off-chain
+  component starts a waiting period on its own.
+- **The finisher bounds what it pays.** At most 8 new token accounts per vault per pass, and no
+  sweeps of empty accounts. Each new account costs it about 0.002 SOL that ends with the heirs, and
+  anyone can make a vault's address own token accounts of worthless mints. What it leaves, the
+  heir's claim sweeps. The spec has the finisher call "the sweeps" without a bound.
+- **Every transaction is simulated before it is sent**, and one the cluster refuses is reported
+  and skipped. That is how "tokens that can't move fail cleanly and are reported" is met without
+  the tools having to know every Token-2022 extension.
+- **A key the owner did not name is told so before anything is sent or paid for.**
+- **A salt is printed as 64 hex digits plus 4 check digits.**
+- **The kit is one HTML page with no script and nothing loaded from anywhere**, generated from the
+  chain, and refused when it would be wrong for that heir.
+- **The gate is met in two tests.** "A local validator with clock jumps" does not exist: a
+  validator's clock cannot be moved. The programs run together at their real durations in LiteSVM,
+  whose clock can (`tests/svm/tests/release.rs`); the tools run against a real local validator
+  with the `short-clocks` test builds (`tools/e2e/`). Decision 5 said so in advance.
+- **The claim program has a `short-clocks` test build** with its own program id, which believes
+  only the vault's `short-clocks` build.
+- **lamport-vault is a submodule at `vendor/lamport-vault`**, pinned to the head of
+  lamport-vault#5. The tools use its SDK and the tests build its program.
+- **TypeScript is run directly by Node.js 22.18 or later**, with no build step, as the vault's SDK
+  scripts are. Dependencies beyond the vault SDK: `@solana/web3.js`, `@solana/spl-token`,
+  `@noble/hashes`, `qrcode`; for development `typescript`, `vitest`, `esbuild`.
+- **A plan can be created after its vault has released to it.** Building the tools showed a way
+  to strand a release: arm a vault to a plan's address without ever creating the plan. The vault
+  program accepts an address with nothing at it (an unused wallet looks the same), the release
+  lands there, and `init_plan` used to refuse a vault that was no longer open. It now also accepts
+  a vault whose tombstone names exactly this plan. The owner signed for that address and only
+  these terms produce it, so nobody gains anything the owner did not sign for; the heirs still
+  prove control. This changes milestone 1's program, in the direction of fewer ways to lose funds.
+  Three guards sit in front of it: the vault SDK's signer refuses a claim address that has neither
+  an account nor a key (lamport-vault#5), the tools' `status` and `claim` name the condition, and
+  the app must create and check the plan before it builds a `SetSuccession` (milestone 4).
+- **Still open: a plan made for another vault.** A vault armed to an existing plan whose terms name
+  a different vault releases to a plan it can never activate. No program can see this. The tools
+  flag it (`status`, `claim`, the kit refuses); the app must refuse it before the owner signs.
+- **The mutation check now proves its baseline.** It first requires the untouched program to pass
+  every test. Without that, a broken machine would "catch" every mutant.
+
 ## From the project owner
 
 - **2026-11-13: Heir's app is a page of the vault site, `vault.lamportrobotics.com/heir`**, not a

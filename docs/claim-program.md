@@ -77,6 +77,12 @@ Creates the plan. Anyone may pay.
   argument.
 - The vault must be an open vault of the Heir-enabled vault program. A mistyped vault address fails
   here, before anything depends on the plan.
+- One other state of the vault is accepted: **it has already released to this very plan.** The
+  vault program cannot tell a plan that was never created from a wallet that was never used, so a
+  vault can be armed to a plan's address with no plan there, and would then release to an address
+  no key controls. The owner signed for that address, and only these terms produce it, so the plan
+  may be created late: by anyone who knows the terms, with the heirs proving control as always.
+  A vault that released anywhere else lets no plan be created for it.
 - **Every heir named by address must prove they control it.** Either is enough:
   1. They sign this transaction, as the payer or as an extra account.
   2. The transaction carries an instruction for Solana's Ed25519 program that verified their
@@ -130,7 +136,7 @@ claimed with `close_account` unset and the empty account closed by a later call.
 | 6001 | `TermsHashMismatch` | |
 | 6002 | `InvalidContingentDelay` | |
 | 6003 | `SameHeirTwice` | |
-| 6004 | `NotALiveVault` | the vault in the terms is not an open vault of the vault program |
+| 6004 | `NotALiveVault` | the vault in the terms is not an open vault of the vault program, nor one that released to this plan |
 | 6005 | `HeirNotProven` | |
 | 6006 | `WrongInstructionsSysvar` | |
 | 6007 | `WrongVault` | not the vault the plan names |
@@ -157,5 +163,13 @@ cd tests/svm && cargo test                                          # the built 
 
 `cargo build-sbf` comes with the Solana tools (agave 2.3.x in CI) and fetches platform-tools v1.56,
 the version `programs/heir-claim/Cargo.toml` pins. The LiteSVM tests load the `.so`, so build first.
-They fabricate the vault's accounts (an open vault, a tombstone); the vault program itself joins the
-tests when its `succession` feature exists.
+Most of them fabricate the vault's accounts (an open vault, a tombstone). `tests/release.rs` does
+not: there the Heir-enabled vault program itself, built from the pinned submodule, runs beside the
+claim program, and the claim program reads what the vault program wrote. Build both first with
+`node tools/scripts/build-programs.mjs`.
+
+The program also has a `short-clocks` test build (own program id, a day lasts one second) for the
+end-to-end run on a local validator and for devnet: [`release-tools.md`](release-tools.md).
+
+The byte layouts are pinned by `kat/claim_encoding.json`, which the TypeScript client writes and
+`programs/heir-claim/tests/encoding.rs` checks against the program's own types.
