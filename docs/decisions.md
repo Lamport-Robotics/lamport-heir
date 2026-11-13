@@ -188,6 +188,14 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   relay is a funded key on a server and one more thing that has to stay up. A check-in costs
   0.000005 SOL, so the owner sends the check-in key's address a few cents of SOL when they arm,
   and checking in needs nobody else.
+- **The family letter is encrypted to a key each heir derives from a signature.** The spec says
+  "encrypted on the owner's device to the heirs' keys". A wallet signs messages but does not
+  decrypt them, so an heir's reading key is derived from their signature over a fixed sentence
+  naming the plan (Ed25519 signatures are deterministic, so the same wallet makes the same key
+  again years later), and the heir gives the owner the public half. X25519, HKDF-SHA-256 and
+  AES-256-GCM; the letter's key is wrapped once per heir. The sentence says the signature is a
+  private key and where to sign it. Before a letter is sealed it is checked for anything that
+  reads like a seed phrase or a key.
 - **Push needs no provider.** Web Push is sent with a key pair the service makes for itself.
   Email needs a sending account, which is the project owner's to open.
 - **A change of plan is announced to every channel and every trusted contact**, with what changed
