@@ -171,5 +171,7 @@ nothing else back.
   missing hook program fails cleanly (the vault's tests). A sweep through a live hook needs a hook
   program to test against.
 - **Hardware and phone wallets** claim through the page in milestone 4, not through this tool.
+- **The finisher asks again every pass about a token that cannot move.** That costs RPC calls, not
+  fees.
 - **The single-file build is not published.** Where heirs download it from, and how they check it,
   is a release question for milestone 6.
