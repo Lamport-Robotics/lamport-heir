@@ -28,3 +28,7 @@ solana-system-interface = { version = "3.2", features = ["bincode"] }
 solana-transaction = "4.1"
 solana-transaction-error = "3.4"
 sha2 = "0.10"
+# The vault's own LiteSVM harness, for tests/release.rs: the real Heir-enabled vault and the real
+# claim program in one VM. It signs with real LMS keys and speaks the vault's wire formats, both
+# already tested where they come from. Needs the submodule: git submodule update --init.
+lamport-vault-svm-tests = { path = "../../vendor/lamport-vault/tests/svm", features = ["succession"] }
