@@ -666,7 +666,7 @@ Nothing in milestone 0 changes what any program does.
 
   The gate built each program at the pull request and at `main`: `lamport_vault.so` is
   `b9c055c3…2a563b` both times and `pq_registry.so` is `95af8d50…22a118` both times, the hashes in
-  `docs/VERIFY.md`. The build with the feature is `9d1bb156…0060f8`, 385 744 bytes.
+  `docs/VERIFY.md`. The build with the feature is `9d1bb156…0060f8`: another program, as it should be.
 - The cold signer (`web/signer.html`) built from that branch is the file `main` builds, byte for
   byte, apart from the commit it prints. The first version of the SDK change added 299 bytes of
   unused code to it; that was found by building both and comparing, and removed.
