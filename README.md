@@ -8,9 +8,9 @@ waiting period. Any signature or check-in from the owner cancels it. If none com
 releases to a claim account, and only the heirs the owner named can withdraw from it. The same plan
 arms and watches Pincer1's own dead-man's switch for the robot's wallet.
 
-**Status: milestone 3.** The claim program, the vault's inactivity clock, the finisher, the claim
-tool and the claim kit exist and are tested, each in a draft pull request; the app and the
-Pincer1 link do not exist yet. Nothing is deployed. Local validators and devnet only. Nothing in
+**Status: milestone 4 in progress.** The claim program, the vault's inactivity clock, the finisher,
+the claim tool and the claim kit are merged and tested. The app and reminders are being built; the
+Pincer1 link does not exist yet. Nothing is deployed. Local validators and devnet only. Nothing in
 this repository is audited.
 
 - Spec: [Lamport Heir spec](https://claude.ai/artifact/G1AFWhoqMZqufobPxZRNuC)
@@ -20,10 +20,10 @@ this repository is audited.
 - The claim program: [`docs/claim-program.md`](docs/claim-program.md)
 - Finishing a release and claiming it, the finisher, the claim tool and the claim kit:
   [`docs/release-tools.md`](docs/release-tools.md)
-- The vault side lives in lamport-vault as the `succession` cargo feature:
-  [lamport-vault#4](https://github.com/Lamport-Robotics/lamport-vault/pull/4) (the feature and its
-  CI) and [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5) (the clock);
-  its reference is `docs/SUCCESSION.md` there
+- The vault side lives in lamport-vault as the `succession` cargo feature, merged in
+  [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5); its reference is
+  [`docs/SUCCESSION.md`](https://github.com/Lamport-Robotics/lamport-vault/blob/main/docs/SUCCESSION.md)
+  there
 
 ```
 programs/heir-claim   the claim program: holds what a vault releases, for the heirs named
@@ -53,11 +53,11 @@ The tools have their own set-up and tests, an end-to-end run on a local validato
 
 | | ships | state |
 |---|---|---|
-| M0 | design note; the vault's tests running with the `succession` feature on and off | in review |
-| M1 | claim program: `init_plan`, `activate`, `claim_sol`, `claim_token`, optional hashed heirs | in review |
-| M2 | Heir-enabled vault: succession state, `SetSuccession`, check-ins, the waiting period, release | in review |
-| M3 | permissionless finisher, claim command-line tool, printable claim kit | in review |
-| M4 | app and reminder service | not started |
+| M0 | design note; the vault's tests running with the `succession` feature on and off | merged |
+| M1 | claim program: `init_plan`, `activate`, `claim_sol`, `claim_token`, optional hashed heirs | merged |
+| M2 | Heir-enabled vault: succession state, `SetSuccession`, check-ins, the waiting period, release | merged |
+| M3 | permissionless finisher, claim command-line tool, printable claim kit | merged |
+| M4 | app and reminder service | in progress |
 | M5 | Pincer1 link | not started |
 | M6 | audit preparation | not started |
 

@@ -136,8 +136,9 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   with the `short-clocks` test builds (`tools/e2e/`). Decision 5 said so in advance.
 - **The claim program has a `short-clocks` test build** with its own program id, which believes
   only the vault's `short-clocks` build.
-- **lamport-vault is a submodule at `vendor/lamport-vault`**, pinned to the head of
-  lamport-vault#5. The tools use its SDK and the tests build its program.
+- **lamport-vault is a submodule at `vendor/lamport-vault`**, pinned to one commit of its `main`
+  (first to the head of lamport-vault#5, then to `main` once that merged). The tools use its SDK
+  and the tests build its program.
 - **TypeScript is run directly by Node.js 22.18 or later**, with no build step, as the vault's SDK
   scripts are. Dependencies beyond the vault SDK: `@solana/web3.js`, `@solana/spl-token`,
   `@noble/hashes`, `qrcode`; for development `typescript`, `vitest`, `esbuild`.
