@@ -123,8 +123,10 @@ which is why the vault needs a clock of its own.
 - **`sweep_closed`** (`lib.rs:558`) is permissionless. For one token account the closed vault still
   owns, it creates the heir's associated token account if missing, moves the whole balance there,
   and closes the vault's account, its rent to the heir. The associated-token program accepts an
-  off-curve owner on chain, so this works when the heir is a program-derived address. Remaining
-  accounts go to the token program as they are, for transfer hooks.
+  off-curve owner on chain, so this works when the heir is a program-derived address: the vault's
+  suite creates the vault's own token accounts that way (`tests/lamport-vault.ts:448`). It has no
+  test that sweeps to a program-derived heir yet; milestone 1 adds one. Remaining accounts go to
+  the token program as they are, for transfer hooks.
 - **`sweep_closed_sol`** (`lib.rs:624`) is permissionless and moves lamports that reach the
   tombstone later to the heir.
 
