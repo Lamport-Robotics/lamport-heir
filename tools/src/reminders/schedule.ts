@@ -32,7 +32,11 @@ export type NoticeKind =
   /** the plan was set, changed or cleared */
   | "plan_changed"
   /** check-ins stop counting in `days`: a full vault signature is due */
-  | "signature_due";
+  | "signature_due"
+  /** the owner's Pincer1 says its own switch fires in `days` unless someone touches the robot */
+  | "robot_warning"
+  /** the owner's Pincer1 says it has passed the robot's wallet to its heir */
+  | "robot_released";
 
 export interface Notice {
   /** Identifies this notice for good. The service sends each key once. */
@@ -49,6 +53,8 @@ export interface Notice {
   earliestRelease?: bigint;
   /** for `released`: where it went */
   heir?: string;
+  /** for `robot_released`: the transaction the robot reported */
+  signature?: string;
 }
 
 /** Days ahead of the deadline at which the owner is reminded; trusted contacts join at 7. */

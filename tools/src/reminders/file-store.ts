@@ -122,12 +122,19 @@ export class FileStore implements Store {
   }
   async record(vault: string, snapshot: Snapshot, deliveries: Delivery[]): Promise<void> {
     this.state.snapshots[vault] = snapshot;
+    this.add(deliveries);
+    this.save();
+  }
+  async enqueue(deliveries: Delivery[]): Promise<void> {
+    this.add(deliveries);
+    this.save();
+  }
+  private add(deliveries: Delivery[]): void {
     for (const d of deliveries) {
       if (d.id in this.state.history) continue;
       this.state.history[d.id] = "";
       this.state.queued[d.id] = d;
     }
-    this.save();
   }
   async outbox(): Promise<Delivery[]> {
     return Object.values(this.state.queued);
