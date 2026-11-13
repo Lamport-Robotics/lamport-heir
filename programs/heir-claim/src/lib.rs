@@ -23,14 +23,22 @@ pub mod state;
 pub mod tombstone;
 
 pub use error::ClaimError;
-pub use state::{heir_commitment, HeirRef, Plan, Terms, HEIR_DOMAIN, MAX_CONTINGENT_DELAY_SECS, MIN_CONTINGENT_DELAY_SECS, PLAN_SEED, TERMS_DOMAIN};
+pub use state::{heir_commitment, HeirRef, Plan, Terms, DAY_SECS, HEIR_DOMAIN, MAX_CONTINGENT_DELAY_SECS, MIN_CONTINGENT_DELAY_SECS, PLAN_SEED, TERMS_DOMAIN};
 
-// Placeholder id with no private key (docs/program-ids.md). Local tests load the program at it.
+// Placeholder ids with no private key (docs/program-ids.md). Local tests load the program at them.
+#[cfg(not(feature = "short-clocks"))]
 declare_id!("2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd");
+// The `short-clocks` test build is a different program: its own id, and its own vault program.
+#[cfg(feature = "short-clocks")]
+declare_id!("HzoHmRyCtxv8nd9u9NpnLTJcJssGJvyvbjeWBY7BMXPD");
 
 /// The Heir-enabled vault program: the only program whose tombstones `activate` believes.
 /// Placeholder id with no private key until the program is deployed (docs/program-ids.md).
+#[cfg(not(feature = "short-clocks"))]
 pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("HK1QPbqjkozJHB74QuGaduYzAtqBe9hry3nV64LmpCsb");
+/// The vault's `short-clocks` test build: the only vault program this test build believes.
+#[cfg(feature = "short-clocks")]
+pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("DGe6SeUVApXcN7j3X613SeTmazXGqtAuFSn7RQWBiDDS");
 
 fn is_token_program(key: &Pubkey) -> bool {
     *key == anchor_spl::token::ID || *key == anchor_spl::token_2022::ID
@@ -111,7 +119,14 @@ pub mod heir_claim {
     /// argument that an IDL can describe.
     ///
     /// The vault in the terms must be an open vault of the Heir-enabled vault program, which catches
-    /// a mistyped address before anything depends on it.
+    /// a mistyped address before anything depends on it. One other state is accepted: a vault that
+    /// has already released to this very plan. Its owner signed for this address, and only these
+    /// terms produce it, so creating the plan late gives nobody anything the owner did not sign
+    /// for. Without it, a vault armed to a plan that was never created would release to an address
+    /// that could never be claimed from. In that state no heir has to prove anything: a proof
+    /// guards against naming an address nobody controls before funds depend on it, and here the
+    /// funds are already at the plan's address. Demanding one would let an heir who cannot sign
+    /// any more keep the other heir out, which is the case a contingent heir exists for.
     ///
     /// Every heir named by address must prove control (see [`proof`]): by signing this transaction
     /// (as the payer, or as any remaining account), or with an Ed25519 program instruction in this
@@ -120,15 +135,16 @@ pub mod heir_claim {
         terms.validate()?;
         require!(terms_hash == terms.hash(), ClaimError::TermsHashMismatch);
         require_keys_eq!(ctx.accounts.vault.key(), terms.vault, ClaimError::WrongVault);
-        require!(tombstone::is_live_vault(&ctx.accounts.vault), ClaimError::NotALiveVault);
-
         let plan_key = ctx.accounts.plan.key();
+        let released_to_this_plan = tombstone::read(&ctx.accounts.vault).is_ok_and(|t| t.heir == plan_key);
+        require!(tombstone::is_live_vault(&ctx.accounts.vault) || released_to_this_plan, ClaimError::NotALiveVault);
+
         for heir in [&terms.primary, &terms.contingent] {
             let Some(address) = heir.as_address() else { continue };
             let signed_this_transaction = ctx.accounts.payer.key() == address
                 || ctx.remaining_accounts.iter().any(|a| a.is_signer && a.key() == address);
             let proven = signed_this_transaction || proof::transaction_proves(&ctx.accounts.instructions, &address, &plan_key)?;
-            require!(proven, ClaimError::HeirNotProven);
+            require!(proven || released_to_this_plan, ClaimError::HeirNotProven);
         }
 
         let plan = &mut ctx.accounts.plan;
@@ -331,7 +347,7 @@ mod tests {
         e as u32 + ERROR_CODE_OFFSET
     }
 
-    const DAY: u64 = 86_400;
+    const DAY: u64 = DAY_SECS;
 
     fn terms(primary: HeirRef, contingent: HeirRef, delay: u64) -> Terms {
         Terms { vault: Pubkey::new_from_array([1; 32]), primary, contingent, contingent_delay_secs: delay }

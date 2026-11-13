@@ -1,0 +1,56 @@
+name: solana tools
+description: >
+  Agave's command-line tools (cargo build-sbf, solana-test-validator) at a pinned version, fetched
+  with a checksum on the installer and cached, plus the cache for the platform-tools that
+  cargo-build-sbf downloads on first use.
+
+inputs:
+  agave-version:
+    description: Agave release, without the leading v
+    required: true
+  agave-install-sha256:
+    description: sha256 of that release's install script
+    required: true
+  platform-tools:
+    description: platform-tools version the programs pin (tools-version in their Cargo.toml)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Cache platform-tools and the SBF toolchain
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/.cache/solana
+        key: platform-tools-${{ inputs.platform-tools }}-${{ runner.os }}
+        restore-keys: |
+          platform-tools-${{ inputs.platform-tools }}-
+
+    - name: Cache agave ${{ inputs.agave-version }}
+      id: agave-cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/.local/share/solana/install
+        key: agave-${{ inputs.agave-version }}-${{ runner.os }}
+
+    - name: Install agave ${{ inputs.agave-version }}
+      if: steps.agave-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        AGAVE_VERSION: ${{ inputs.agave-version }}
+        AGAVE_INSTALL_SHA256: ${{ inputs.agave-install-sha256 }}
+      run: |
+        curl -sSfL "https://release.anza.xyz/v${AGAVE_VERSION}/install" -o /tmp/agave-install.sh
+        echo "${AGAVE_INSTALL_SHA256}  /tmp/agave-install.sh" | sha256sum -c -
+        sh /tmp/agave-install.sh
+
+    - name: Add agave to PATH
+      shell: bash
+      run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+    - name: Versions
+      shell: bash
+      run: |
+        export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+        cargo build-sbf --version
+        solana-test-validator --version

@@ -1,0 +1,37 @@
+{
+  "name": "lamport-heir-tools",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Lamport Heir: the finisher, the claim tool and the claim kit. Everything here speaks plain Solana RPC and needs no Lamport server.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "lamport-heir": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "kat": "node scripts/write-kat.ts",
+    "bundle": "node scripts/bundle.mjs",
+    "e2e": "vitest run --config vitest.e2e.config.ts",
+    "build:programs": "node scripts/build-programs.mjs"
+  },
+  "dependencies": {
+    "@lamport-robotics/lms": "file:../vendor/lamport-vault/sdk/packages/lms",
+    "@lamport-robotics/vault": "file:../vendor/lamport-vault/sdk/packages/vault",
+    "@noble/hashes": "^2.0.0",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.98.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/qrcode": "^1.5.6",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

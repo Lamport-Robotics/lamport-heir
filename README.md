@@ -8,15 +8,18 @@ waiting period. Any signature or check-in from the owner cancels it. If none com
 releases to a claim account, and only the heirs the owner named can withdraw from it. The same plan
 arms and watches Pincer1's own dead-man's switch for the robot's wallet.
 
-**Status: milestone 2.** The claim program and the vault's inactivity clock exist and are tested,
-each in a draft pull request; the tools and the app do not exist yet. Nothing is deployed. Local
-validators and devnet only. Nothing in this repository is audited.
+**Status: milestone 3.** The claim program, the vault's inactivity clock, the finisher, the claim
+tool and the claim kit exist and are tested, each in a draft pull request; the app and the
+Pincer1 link do not exist yet. Nothing is deployed. Local validators and devnet only. Nothing in
+this repository is audited.
 
 - Spec: [Lamport Heir spec](https://claude.ai/artifact/G1AFWhoqMZqufobPxZRNuC)
 - How the spec maps onto the vault and the Pincer1 daemon, and where it does not fit:
   [`docs/design-note.md`](docs/design-note.md)
 - What was decided where the spec left a choice: [`docs/decisions.md`](docs/decisions.md)
 - The claim program: [`docs/claim-program.md`](docs/claim-program.md)
+- Finishing a release and claiming it, the finisher, the claim tool and the claim kit:
+  [`docs/release-tools.md`](docs/release-tools.md)
 - The vault side lives in lamport-vault as the `succession` cargo feature:
   [lamport-vault#4](https://github.com/Lamport-Robotics/lamport-vault/pull/4) (the feature and its
   CI) and [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5) (the clock);
@@ -24,20 +27,27 @@ validators and devnet only. Nothing in this repository is audited.
 
 ```
 programs/heir-claim   the claim program: holds what a vault releases, for the heirs named
-tests/svm             the built program in LiteSVM, with a clock the tests can move
-docs/                 design note, decisions, the claim program, program ids, models
+tools/                the finisher, the claim tool and the claim kit (TypeScript)
+tests/svm             the built programs in LiteSVM, with a clock the tests can move
+kat/                  byte layouts shared by the program and the tools
+vendor/lamport-vault  lamport-vault, pinned to one commit (a git submodule)
+docs/                 design note, decisions, the claim program, the tools, program ids, models
 ```
 
 ## Build and test
 
-Needs Rust and the Solana tools (agave 2.3.x; `cargo build-sbf` fetches platform-tools v1.56 on first
-use).
+Needs Rust, the Solana tools (agave 2.3.x; `cargo build-sbf` fetches platform-tools v1.56 on first
+use) and, for the tools, Node.js 22.18 or later.
 
 ```sh
+git submodule update --init                                         # lamport-vault, pinned
 cargo test --workspace                                              # unit tests
-cargo build-sbf --manifest-path programs/heir-claim/Cargo.toml     # target/deploy/heir_claim.so
-cd tests/svm && cargo test                                          # the built program in LiteSVM
+node tools/scripts/build-programs.mjs                               # both programs, into target/deploy*
+(cd tests/svm && cargo test)                                        # the built programs in LiteSVM
 ```
+
+The tools have their own set-up and tests, an end-to-end run on a local validator among them:
+[`tools/README.md`](tools/README.md).
 
 ## Milestones
 
@@ -46,7 +56,7 @@ cd tests/svm && cargo test                                          # the built 
 | M0 | design note; the vault's tests running with the `succession` feature on and off | in review |
 | M1 | claim program: `init_plan`, `activate`, `claim_sol`, `claim_token`, optional hashed heirs | in review |
 | M2 | Heir-enabled vault: succession state, `SetSuccession`, check-ins, the waiting period, release | in review |
-| M3 | permissionless finisher, claim command-line tool, printable claim kit | not started |
+| M3 | permissionless finisher, claim command-line tool, printable claim kit | in review |
 | M4 | app and reminder service | not started |
 | M5 | Pincer1 link | not started |
 | M6 | audit preparation | not started |

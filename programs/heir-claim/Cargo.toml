@@ -20,6 +20,10 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
+# A test build for devnet in which a day lasts one second, so a contingent delay runs out during a
+# test. It declares its own program id and believes the vault's `short-clocks` build, and no other:
+# it can never stand in for the real program (docs/program-ids.md).
+short-clocks = []
 
 [dependencies]
 anchor-lang = "0.32.1"
@@ -28,6 +32,8 @@ solana-sha256-hasher = { version = "2.3", default-features = false }
 
 [dev-dependencies]
 hex = "0.4"
+# reads kat/claim_encoding.json, the vectors shared with the TypeScript client
+serde_json = "1"
 
 # The toolchain lamport-vault pins: platform-tools v1.48 (bundled with Agave 2.3) cannot compile
 # edition-2024 dependencies; v1.56 can. cargo-build-sbf reads this key.
