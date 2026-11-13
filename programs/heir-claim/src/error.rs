@@ -12,7 +12,7 @@ pub enum ClaimError {
     InvalidContingentDelay,
     #[msg("the primary and the contingent heir are the same")]
     SameHeirTwice,
-    #[msg("the vault in the terms is not a live vault of the Heir-enabled vault program")]
+    #[msg("the vault in the terms is not a live vault of the Heir-enabled vault program, nor one that has released to this plan")]
     NotALiveVault,
     #[msg("an heir named by address has not proven control: sign the transaction, or include an Ed25519 instruction over the acceptance message")]
     HeirNotProven,

@@ -119,7 +119,11 @@ pub mod heir_claim {
     /// argument that an IDL can describe.
     ///
     /// The vault in the terms must be an open vault of the Heir-enabled vault program, which catches
-    /// a mistyped address before anything depends on it.
+    /// a mistyped address before anything depends on it. One other state is accepted: a vault that
+    /// has already released to this very plan. Its owner signed for this address, and only these
+    /// terms produce it, so creating the plan late gives nobody anything the owner did not sign
+    /// for. Without it, a vault armed to a plan that was never created would release to an address
+    /// that could never be claimed from.
     ///
     /// Every heir named by address must prove control (see [`proof`]): by signing this transaction
     /// (as the payer, or as any remaining account), or with an Ed25519 program instruction in this
@@ -128,9 +132,10 @@ pub mod heir_claim {
         terms.validate()?;
         require!(terms_hash == terms.hash(), ClaimError::TermsHashMismatch);
         require_keys_eq!(ctx.accounts.vault.key(), terms.vault, ClaimError::WrongVault);
-        require!(tombstone::is_live_vault(&ctx.accounts.vault), ClaimError::NotALiveVault);
-
         let plan_key = ctx.accounts.plan.key();
+        let released_to_this_plan = tombstone::read(&ctx.accounts.vault).is_ok_and(|t| t.heir == plan_key);
+        require!(tombstone::is_live_vault(&ctx.accounts.vault) || released_to_this_plan, ClaimError::NotALiveVault);
+
         for heir in [&terms.primary, &terms.contingent] {
             let Some(address) = heir.as_address() else { continue };
             let signed_this_transaction = ctx.accounts.payer.key() == address

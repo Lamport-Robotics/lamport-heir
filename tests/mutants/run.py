@@ -31,7 +31,9 @@ MUTANTS = [
  ("primary claim does not restart the clock", "lib.rs", "    if role == Role::Primary {\n        plan.contingent_clock_ts = now;\n    }\n", ""),
  ("heirs need not prove control", "lib.rs", "            require!(proven, ClaimError::HeirNotProven);\n", "            let _ = proven;\n"),
  ("claims before activation", "lib.rs", "    require!(plan.activated, ClaimError::NotActivated);\n", ""),
- ("init_plan takes any vault account", "lib.rs", "        require!(tombstone::is_live_vault(&ctx.accounts.vault), ClaimError::NotALiveVault);\n", ""),
+ ("init_plan takes any vault account", "lib.rs", "        require!(tombstone::is_live_vault(&ctx.accounts.vault) || released_to_this_plan, ClaimError::NotALiveVault);\n", ""),
+ ("init_plan takes a vault that released to anyone", "lib.rs", ".is_ok_and(|t| t.heir == plan_key);\n", ".is_ok();\n"),
+ ("init_plan refuses a vault that released to this plan", "lib.rs", "        require!(tombstone::is_live_vault(&ctx.accounts.vault) || released_to_this_plan, ClaimError::NotALiveVault);\n", "        require!(tombstone::is_live_vault(&ctx.accounts.vault), ClaimError::NotALiveVault);\n"),
  ("message accepted if it merely ends with the text", "proof.rs", "        && signed.starts_with(OFFCHAIN_DOMAIN)\n", ""),
  ("terms_hash unchecked", "lib.rs", "        require!(terms_hash == terms.hash(), ClaimError::TermsHashMismatch);\n", ""),
  ("second activate restarts everything", "lib.rs", "        if plan.activated {\n            return Ok(());\n        }\n", ""),
@@ -48,9 +50,26 @@ def sh(cmd, cwd):
     return subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True)
 
 
+def ran_and_failed(output):
+    lines = [l for l in output.splitlines() if l.startswith("test ") and " ... " in l]
+    return len(lines), [l.split()[1] for l in lines if l.rstrip().endswith("FAILED")]
+
+
 def main():
     only = sys.argv[1:]
     bad = []
+    # A mutant counts as caught when a test fails. That means nothing unless every test passes
+    # without the mutation: a missing build, a stale file or a broken machine would otherwise
+    # "catch" everything. So the untouched program goes first, and has to be green.
+    build = sh(BUILD, ROOT)
+    if build.returncode != 0:
+        print("the untouched program does not build:", build.stderr[-400:])
+        return 1
+    ran, failed = ran_and_failed(sh("cargo test 2>&1", os.path.join(ROOT, "tests", "svm")).stdout)
+    if ran == 0 or failed:
+        print(f"the untouched program must pass every test before a mutant can be called caught: {ran} ran, {len(failed)} failed {failed[:5]}")
+        return 1
+    print(f"baseline  {ran} tests pass on the untouched program", flush=True)
     for name, file, old, new in MUTANTS:
         if only and not any(o in name for o in only):
             continue

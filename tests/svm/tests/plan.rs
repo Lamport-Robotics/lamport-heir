@@ -313,6 +313,64 @@ fn the_vault_must_be_an_open_vault_of_the_vault_program() {
 }
 
 #[test]
+fn a_plan_can_still_be_created_after_its_vault_released_to_it() {
+    // A vault was armed to a plan's address, and the plan was never created: the release went to
+    // an address with nothing at it. The owner signed for that address, which only these terms
+    // produce, so the plan may be created late, and then it works like any other.
+    let mut w = world();
+    let payer = w.b.payer.pubkey();
+    let vault = w.b.open_vault();
+    let t = terms(&vault, HeirRef::address(&w.primary.pubkey()), HeirRef::none(), 0);
+    let plan = t.plan();
+    w.b.release_vault(&vault, &plan, 0);
+    w.b.fund(&plan, 3_000_000_000); // what the vault released, sitting at the plan's address
+
+    // the heir still has to prove control, late or not
+    assert_eq!(custom(w.b.send(&[init_plan_ix(&payer, &t, &[])], &[]).unwrap_err()), err::HEIR_NOT_PROVEN);
+    w.b.send(&[init_plan_ix(&payer, &t, &[w.primary.pubkey()])], &[&w.primary]).expect("init_plan after the release");
+    let state = w.b.plan(&plan);
+    assert!(!state.activated);
+    assert_eq!(state.terms, t);
+
+    w.b.send(&[activate_ix(&plan, &vault)], &[]).expect("activate");
+    let before = w.b.balance(&w.primary.pubkey());
+    let held = w.b.balance(&plan) - w.b.rent(PLAN_SPACE);
+    assert!(held >= 3_000_000_000 - w.b.rent(PLAN_SPACE), "what was released is still there to claim");
+    let primary = w.primary.insecure_clone();
+    w.b.send(&[claim_sol_ix(&plan, &primary.pubkey(), None)], &[&primary]).expect("claim_sol");
+    assert_eq!(w.b.balance(&primary.pubkey()), before + held);
+}
+
+#[test]
+fn a_released_vault_lets_only_the_plan_it_named_be_created() {
+    let mut w = world();
+    let payer = w.b.payer.pubkey();
+    let signers = [w.primary.pubkey()];
+    let p = HeirRef::address(&w.primary.pubkey());
+
+    // released to somebody else: no plan can be made for this vault any more
+    let vault = w.b.open_vault();
+    let t = terms(&vault, p, HeirRef::none(), 0);
+    w.b.release_vault(&vault, &Keypair::new().pubkey(), 0);
+    assert_eq!(custom(w.b.send(&[init_plan_ix(&payer, &t, &signers)], &[&w.primary]).unwrap_err()), err::NOT_A_LIVE_VAULT);
+
+    // released to a plan with other terms (another delay, so another address): these terms are not it
+    let vault = w.b.open_vault();
+    let named = terms(&vault, p, HeirRef::address(&w.contingent.pubkey()), YEAR);
+    let other = terms(&vault, p, HeirRef::address(&w.contingent.pubkey()), YEAR + 86_400);
+    w.b.release_vault(&vault, &named.plan(), 0);
+    let both = [w.primary.pubkey(), w.contingent.pubkey()];
+    assert_eq!(custom(w.b.send(&[init_plan_ix(&payer, &other, &both)], &[&w.primary, &w.contingent]).unwrap_err()), err::NOT_A_LIVE_VAULT);
+    w.b.send(&[init_plan_ix(&payer, &named, &both)], &[&w.primary, &w.contingent]).expect("the plan the vault named");
+
+    // a tombstone that names the plan, but is not the vault program's: believed by nobody
+    let fake = Keypair::new().pubkey();
+    let t = terms(&fake, p, HeirRef::none(), 0);
+    w.b.put(&fake, &TOKEN_PROGRAM_ID, tombstone_data(&[7; 32], 1, &t.plan()), 0);
+    assert_eq!(custom(w.b.send(&[init_plan_ix(&payer, &t, &signers)], &[&w.primary]).unwrap_err()), err::NOT_A_LIVE_VAULT);
+}
+
+#[test]
 fn the_instructions_sysvar_cannot_be_substituted() {
     let mut w = world();
     let t = w.solo();
