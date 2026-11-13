@@ -62,6 +62,13 @@ describes the result.
   `execute_direct` tests are. It does not use the Anchor command-line tool; an IDL can be generated
   later if a client wants one.
 
+## From the project owner
+
+- **2026-11-13: Heir's app is a page of the vault site, `vault.lamportrobotics.com/heir`**, not a
+  site of its own. Being on the vault page's origin, it shares that page's signing flow and its
+  record of which one-time signing keys have been used, and the check-in key it keeps in the
+  browser belongs to that origin.
+
 ## Still the project owner's
 
 - Devnet keypairs and devnet deployment (milestone 4).
