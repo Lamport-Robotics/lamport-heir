@@ -157,6 +157,31 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
 - **The mutation check now proves its baseline.** It first requires the untouched program to pass
   every test. Without that, a broken machine would "catch" every mutant.
 
+## Milestone 4, the app and the reminders (in progress)
+
+- **No plan interview and no AI heir guide in v1.** The spec has a language model explain the
+  choices, propose values and guide heirs. On 2026-11-13 the project owner asked whether the
+  interview was needed, and the answer was no: the form has five choices with sensible defaults,
+  and fixed explanatory text beside each field does the explaining. Leaving the model out removes
+  an API key, a running cost, a server that would have to hold the key, and the only place a model
+  touches the flow. `tools/src/plan/assistant.ts` (a model may only propose durations and privacy
+  switches, the owner accepts each field, a reply that asks for a secret is withheld) stays in the
+  repository, tested and unused, so that adding an assistant later starts from the guard.
+- **The vault's cold signer is not changed.** A Heir-enabled vault belongs to another program, so
+  the vault page and its signer have to know that program's id and how to show a `SetSuccession`
+  before an owner can use such a vault at all. That is done as a second build of the same source,
+  the way the program itself is a second build: the existing page and `signer.html` come out
+  byte for byte as they are today, and the Heir build is a separate file with its own hash.
+- **The check-in key pays its own fee.** The spec lets Lamport pay the fee of a check-in. A fee
+  relay is a funded key on a server and one more thing that has to stay up. A check-in costs
+  0.000005 SOL, so the owner sends the check-in key's address a few cents of SOL when they arm,
+  and checking in needs nobody else.
+- **Push needs no provider.** Web Push is sent with a key pair the service makes for itself.
+  Email needs a sending account, which is the project owner's to open.
+- **A change of plan is announced to every channel and every trusted contact**, with what changed
+  and the soonest a release could now happen. With no on-chain queue (decision 2), this alarm is
+  what stands in front of a forced change.
+
 ## From the project owner
 
 - **2026-11-13: Heir's app is a page of the vault site, `vault.lamportrobotics.com/heir`**, not a
