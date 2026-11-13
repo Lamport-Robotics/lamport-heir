@@ -195,8 +195,10 @@ both and comparing the files.
 | end of `lib.rs` | `pub mod succession;` (already there after milestone 0) |
 
 Everything else, including the account structs for the new instructions, the rules and the errors
-(a separate `#[error_code(offset = 6100)]` enum, so `error.rs` is not touched), lives in
-`succession.rs`.
+(numbered from 6100, so `error.rs` is not touched), lives in `succession.rs`. As built, the errors
+are a hand-written type and not a second `#[error_code]` enum: Anchor's IDL holds one error list
+per program, and a second enum replaced the vault's own list there
+([`decisions.md`](decisions.md), milestone 2).
 
 `check_action` is deliberately not on the list. Its exhaustion rule stays as it is, so the last free
 leaf still only does `Rotate` or `Close`, and `SetSuccession` is refused on it.
@@ -401,7 +403,8 @@ then, local tests use ids with no private key.
   `SetSuccession` in words before signing. Today the cold signer refuses any action it cannot show.
 
 Heir's own app must not take the 24 words, so this is the only place a `SetSuccession` can be signed.
-I plan to include both in the milestone 2 pull request to lamport-vault.
+The SDK part shipped with milestone 2. The page and the cold signer follow in milestone 4, with the
+`/heir` page they serve ([`decisions.md`](decisions.md)).
 
 ### 4.9 Tests
 
@@ -421,9 +424,10 @@ I plan to include both in the milestone 2 pull request to lamport-vault.
   confidential balances, required memos.
 
 **Short clocks.** Milestone 4's gate is a full cycle on devnet "with short durations", which the
-90- and 30-day floors forbid. I propose a second cargo feature, `short-clocks`, that divides every
-duration (floors, the two-year cap, the 90-day extension, the 30-day delay) by a fixed factor and
-compiles in a *third* program id. A short-clock build can then never be deployed at the real id,
+90- and 30-day floors forbid. I propose a second cargo feature, `short-clocks`, that shortens every
+duration (floors, the two-year cap, the 90-day extension, the 30-day delay) and compiles in a
+*third* program id. As built it makes one "day" last one second, so the numbers in the code stay
+the same. A short-clock build can then never be deployed at the real id,
 and CI checks the release build does not carry it. Same idea as the vault's `small-history`.
 
 ## 5. The claim program (milestone 1)
@@ -612,8 +616,9 @@ None of these is a vulnerability; they are corners Heir has to handle or report.
   [`transfer_fee/mod.rs`](https://github.com/solana-program/token-2022/blob/main/interface/src/extension/transfer_fee/mod.rs)),
   and it refuses one with a confidential balance the same way. So for a vault account that ever
   received a fee-bearing token, the sweep should fail until someone runs `HarvestWithheldTokensToMint`,
-  which needs no signer. That is read from the token program's source, not yet run here; the
-  per-extension tests will run it, and the finisher and claim script will harvest first.
+  which needs no signer. Milestone 2's per-extension tests confirmed it on chain, and that such an
+  account must not be passed to `execute_succession` either
+  ([`decisions.md`](decisions.md), milestone 2); the finisher and claim script will harvest first.
 - **Closing a small vault to an empty address.** An H5 vault holding nothing above its rent pays out
   313 200 lamports on `Close`, less than the 890 880 a new system account needs, so by the rent
   rules the transaction should fail until the destination is funded. Computed from the account
@@ -642,3 +647,37 @@ None of these is a vulnerability; they are corners Heir has to handle or report.
 - This note, and the model behind section 4.4.
 
 Nothing in milestone 0 changes what any program does.
+
+## 10. Milestone 2 results
+
+- lamport-vault [pull request 5](https://github.com/Lamport-Robotics/lamport-vault/pull/5): the
+  succession clock behind the feature. `docs/SUCCESSION.md` in that repository is its reference.
+  All 24 checks pass at `c7f1710`:
+
+  | suite | `main` | default build | with `succession` |
+  |---|---|---|---|
+  | `cargo test --workspace` | 65 | 65 | 79, and 74 with `short-clocks` |
+  | SDK | 275 | 303 (28 new) | the same run |
+  | localnet suite | 42 passed, 2 skipped | 42 passed, 2 skipped | 50 passed, 2 skipped |
+  | localnet suite with `small-history` | 44 | 44 | 52 |
+  | LiteSVM | 5 | 5 | 43 |
+  | fuzz targets | 5 | 5 | 7 |
+  | mutation check | | | 38 of 38 mutants caught |
+
+  The gate built each program at the pull request and at `main`: `lamport_vault.so` is
+  `b9c055c3…2a563b` both times and `pq_registry.so` is `95af8d50…22a118` both times, the hashes in
+  `docs/VERIFY.md`. The build with the feature is `9d1bb156…0060f8`: another program, as it should be.
+- The cold signer (`web/signer.html`) built from that branch is the file `main` builds, byte for
+  byte, apart from the commit it prints. The first version of the SDK change added 299 bytes of
+  unused code to it; that was found by building both and comparing, and removed.
+- What was built differently from this note, and what the Token-2022 tests found:
+  [`decisions.md`](decisions.md), "Milestone 2".
+
+One thing came up that this note did not foresee. A vault can name, as its claim address, a plan
+that was made for a *different* vault. The vault program cannot tell: it does not know the claim
+program's accounts, and must not. The release would go to that plan, and the plan can only be
+activated by the vault in its own terms, so what it received could not be claimed. Nothing in the
+programs is wrong and nothing is lost by accident, but whatever builds a `SetSuccession` has to
+check the plan's terms against the vault before the owner signs. The tools read this and flag it
+(milestone 3); the app must refuse it (milestone 4).
+

@@ -8,9 +8,9 @@ waiting period. Any signature or check-in from the owner cancels it. If none com
 releases to a claim account, and only the heirs the owner named can withdraw from it. The same plan
 arms and watches Pincer1's own dead-man's switch for the robot's wallet.
 
-**Status: milestone 1.** The claim program exists and is tested; the vault's clock, the tools and
-the app do not exist yet. Nothing is deployed. Local validators and devnet only. Nothing in this
-repository is audited.
+**Status: milestone 2.** The claim program and the vault's inactivity clock exist and are tested,
+each in a draft pull request; the tools and the app do not exist yet. Nothing is deployed. Local
+validators and devnet only. Nothing in this repository is audited.
 
 - Spec: [Lamport Heir spec](https://claude.ai/artifact/G1AFWhoqMZqufobPxZRNuC)
 - How the spec maps onto the vault and the Pincer1 daemon, and where it does not fit:
@@ -18,7 +18,9 @@ repository is audited.
 - What was decided where the spec left a choice: [`docs/decisions.md`](docs/decisions.md)
 - The claim program: [`docs/claim-program.md`](docs/claim-program.md)
 - The vault side lives in lamport-vault as the `succession` cargo feature:
-  [lamport-vault#4](https://github.com/Lamport-Robotics/lamport-vault/pull/4)
+  [lamport-vault#4](https://github.com/Lamport-Robotics/lamport-vault/pull/4) (the feature and its
+  CI) and [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5) (the clock);
+  its reference is `docs/SUCCESSION.md` there
 
 ```
 programs/heir-claim   the claim program: holds what a vault releases, for the heirs named
@@ -43,7 +45,7 @@ cd tests/svm && cargo test                                          # the built 
 |---|---|---|
 | M0 | design note; the vault's tests running with the `succession` feature on and off | in review |
 | M1 | claim program: `init_plan`, `activate`, `claim_sol`, `claim_token`, optional hashed heirs | in review |
-| M2 | Heir-enabled vault: succession state, `SetSuccession`, check-ins, the waiting period, release | not started |
+| M2 | Heir-enabled vault: succession state, `SetSuccession`, check-ins, the waiting period, release | in review |
 | M3 | permissionless finisher, claim command-line tool, printable claim kit | not started |
 | M4 | app and reminder service | not started |
 | M5 | Pincer1 link | not started |
