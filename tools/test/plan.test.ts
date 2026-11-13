@@ -212,3 +212,106 @@ describe("what the assistant is told, and what it may say", () => {
     for (const text of fine) expect(asksForSecret(text), text).toBe(false);
   });
 });
+
+// ---- from fields to the chain, and the checks before a signature ----
+
+import { emptySuccession, encodeTombstone, encodeVault, TOMBSTONE_ACCOUNT_VERSION } from "@lamport-robotics/vault";
+import { SystemProgram } from "@solana/web3.js";
+import { encodePlanForTests } from "../scripts/claim-kat.ts";
+import { heirMatches, planAddress } from "../src/claim.ts";
+import { buildPlan, checkBeforeArming } from "../src/plan/arming.ts";
+import { PROGRAMS, SHORT_CLOCKS_PROGRAMS } from "../src/programs.ts";
+import { FakeChain } from "./fake-chain.ts";
+
+describe("from the owner's fields to what goes on chain", () => {
+  const saltC = new Uint8Array(32).fill(9);
+  const checkinKey = new PublicKey(pk(0x66));
+
+  it("builds the terms, the plan's address and the SetSuccession, in the programs' units", () => {
+    const b = buildPlan(good, { programs: PROGRAMS, checkinKey, salts: { contingent: saltC } });
+    expect(b.terms.vault.toBase58()).toBe(VAULT);
+    expect(b.terms.primary).toEqual({ kind: "address", address: new PublicKey(PRIMARY) });
+    expect(b.terms.contingent.kind).toBe("hashed");
+    expect(heirMatches(b.terms.contingent, new PublicKey(CONTINGENT), saltC)).toBe(true);
+    expect(b.terms.contingentDelaySecs).toBe(365n * 86_400n);
+    expect(b.plan.equals(planAddress(b.terms, PROGRAMS.claim))).toBe(true);
+    expect(b.succession).toEqual({ claim: b.plan, windowSecs: 365n * 86_400n, waitSecs: 60n * 86_400n, checkinKey, contactKey: PublicKey.default });
+    expect(b.salts).toEqual({ contingent: saltC });
+    // the same fields give the same plan; the test build gives another, on its own clock
+    expect(buildPlan(good, { programs: PROGRAMS, checkinKey, salts: { contingent: saltC } }).plan.equals(b.plan)).toBe(true);
+    const short = buildPlan({ ...good, windowDays: 90, waitDays: 30, contingentDelayDays: 30 }, { programs: SHORT_CLOCKS_PROGRAMS, salts: { contingent: saltC } });
+    expect(short.succession.windowSecs).toBe(90n);
+    expect(short.terms.contingentDelaySecs).toBe(30n);
+    expect(short.plan.equals(b.plan)).toBe(false);
+  });
+
+  it("needs a salt for each private heir, and two different ones for two", () => {
+    expect(() => buildPlan(good, { programs: PROGRAMS })).toThrow(/contingent heir is kept private, which needs a 32-byte salt/);
+    const bothPrivate = { ...good, primary: { address: PRIMARY, private: true } };
+    expect(() => buildPlan(bothPrivate, { programs: PROGRAMS, salts: { primary: saltC, contingent: saltC } })).toThrow(/two different salts/);
+    expect(() => buildPlan({ ...good, waitDays: 1 }, { programs: PROGRAMS, salts: { contingent: saltC } })).toThrow(/waitDays must be at least 30 days/);
+    // a salt given for an heir who is not private is not used, and not kept
+    const named = buildPlan({ ...good, contingent: { address: CONTINGENT, private: false } }, { programs: PROGRAMS, salts: { contingent: saltC } });
+    expect(named.terms.contingent.kind).toBe("address");
+    expect(named.salts).toEqual({});
+  });
+});
+
+describe("before the owner is asked to sign", () => {
+  const H5 = Uint8Array.from([0, 0, 0, 5, 0, 0, 0, 3, ...new Uint8Array(48).fill(0xab)]);
+  const openVault = encodeVault({ version: 3, bump: 255, vaultId: new Uint8Array(32).fill(1), lmsPubkey: H5, spent: 0, generation: 0, createdSlot: 1n, succession: emptySuccession(), used: new Uint8Array(4), usedKeys: [] });
+  const named = { ...good, contingent: { address: CONTINGENT, private: false } };
+  const build = buildPlan(named, { programs: PROGRAMS });
+  const vault = new PublicKey(VAULT);
+  const planBytes = (terms = build.terms, activated = false) => encodePlanForTests({ bump: 255, terms, createdTs: 1n, activated, activatedTs: 0n, closedSlot: 0n, contingentClockTs: 0n });
+
+  function world() {
+    const chain = new FakeChain();
+    chain.put(vault, PROGRAMS.vault, openVault);
+    chain.put(build.plan, PROGRAMS.claim, planBytes());
+    return chain;
+  }
+
+  it("says go ahead when the vault is open and the plan exists with exactly these terms", async () => {
+    expect(await checkBeforeArming(world(), build)).toEqual([]);
+  });
+
+  it("refuses a plan that was never created, with or without lamports at its address", async () => {
+    const chain = world();
+    chain.accounts.delete(build.plan.toBase58());
+    expect((await checkBeforeArming(chain, build))[0]).toMatch(/has not been created/);
+    chain.put(build.plan, SystemProgram.programId, new Uint8Array(0), 1_000_000);
+    expect((await checkBeforeArming(chain, build))[0]).toMatch(/has not been created/);
+  });
+
+  it("refuses a plan made for another vault, and anything else that sits at the plan's address", async () => {
+    const chain = world();
+    const otherTerms = { ...build.terms, vault: new PublicKey(pk(0x12)) };
+    chain.put(build.plan, PROGRAMS.claim, planBytes(otherTerms));
+    expect(await checkBeforeArming(chain, build)).toEqual([expect.stringMatching(/was made for another vault .* it could never be activated by this one/)]);
+    chain.put(build.plan, PROGRAMS.claim, planBytes({ ...build.terms, contingentDelaySecs: build.terms.contingentDelaySecs + 1n }));
+    expect(await checkBeforeArming(chain, build)).toEqual([expect.stringMatching(/does not hold these terms/)]);
+    chain.put(build.plan, new PublicKey(pk(0x77)), planBytes());
+    expect(await checkBeforeArming(chain, build)).toEqual([expect.stringMatching(/is not a plan of the claim program/)]);
+    chain.put(build.plan, SHORT_CLOCKS_PROGRAMS.claim, planBytes());
+    expect(await checkBeforeArming(chain, build)).toEqual([expect.stringMatching(/is not a plan of the claim program/)]);
+    chain.put(build.plan, PROGRAMS.claim, planBytes(build.terms, true));
+    expect(await checkBeforeArming(chain, build)).toEqual([expect.stringMatching(/already been activated/)]);
+  });
+
+  it("refuses a vault that is missing, closed, or not of the Heir-enabled program", async () => {
+    const chain = world();
+    chain.accounts.delete(vault.toBase58());
+    expect((await checkBeforeArming(chain, build))[0]).toMatch(/no account at the vault's address/);
+    chain.put(vault, PROGRAMS.vault, encodeTombstone({ version: TOMBSTONE_ACCOUNT_VERSION, vaultId: new Uint8Array(32), closedSlot: 1n, heir: build.plan }));
+    expect((await checkBeforeArming(chain, build))[0]).toMatch(/is closed/);
+    chain.put(vault, SHORT_CLOCKS_PROGRAMS.vault, openVault);
+    expect((await checkBeforeArming(chain, build))[0]).toMatch(/not a vault of the Heir-enabled vault program/);
+  });
+
+  it("refuses a SetSuccession that names anything but the plan", async () => {
+    const tampered = { ...build, succession: { ...build.succession, claim: new PublicKey(ATTACKER) } };
+    expect((await checkBeforeArming(world(), tampered))[0]).toMatch(/does not name this plan's address/);
+    expect(await checkBeforeArming(world(), { ...build, vault: new PublicKey(pk(0x12)) })).toContain("the plan's terms are for another vault");
+  });
+});
