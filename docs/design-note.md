@@ -24,8 +24,9 @@ what the code does, the code was read, and for the vault's build, measured.
 - Pincer1's switch behaves as the spec describes: the timer and the signed transaction live on the
   controller, the heir must be an ordinary address, and tokens are classic SPL only.
 
-**What does not fit, and needs a decision before the milestone it blocks.** Each item has a
-recommended answer so work is not blocked on wording, but none of them is mine to settle.
+**What does not fit, and needed a decision before the milestone it blocks.** Each item has a
+recommended answer. On 2026-11-13 the project owner left all eight to the builder, and each was
+decided as recommended: [`decisions.md`](decisions.md).
 
 | # | finding | blocks | recommended |
 |---|---|---|---|
@@ -567,6 +568,38 @@ link.
   process and calls `tick()` itself, with pincer1 as a pinned submodule. No daemon change.
 - **The daemon's default RPC is mainnet.** The switch moves the robot's real wallet. Milestone 5 is
   tested against the simulator and a local validator only.
+
+### 7.4 Nothing here conflicts with Pincer1's own switch
+
+Pincer1 already has a dead-man's switch for the robot's wallet. Heir does not replace it, wrap it
+or add a second one. The rules the link is built under:
+
+- **One switch for the robot's wallet, and it is Pincer1's.** Heir arms it through the daemon, with
+  the owner's three-second hold on the robot, and after that only reads it. The timer, the signed
+  transaction and the decision to release stay on the controller.
+- **Different money.** The robot's wallet is an ordinary Solana wallet whose key sits in the
+  controller. A vault is a program account that moves on an LMS signature. The two releases move
+  different funds, so they cannot pay twice or race each other.
+- **The robot never fires before the vault could.** Its switch has no public waiting period and
+  cannot be undone, so its inactivity period is the vault's window plus the vault's waiting period,
+  425 days by default. Its timer counts powered time only, so in practice it fires later, never
+  earlier.
+- **The same primary heir.** The robot pays the primary heir's own address. The contingent heir does
+  not cover the robot's wallet, and the link says so when arming.
+- **A touch is not a check-in, and a check-in is not a touch.** The two clocks stay independent. The
+  app may remind the owner to do the other; it never counts one for the other.
+- **The switch's nonce account is used for nothing else.** Heir creates a dedicated one, never
+  advances it, and watches its stored value so it can say if something else did.
+- **Heir never clears, re-arms or releases on its own.** Clearing and re-arming are the owner's, on
+  the robot, with the controller's touch. Heir never calls `/inheritance/release`; the daemon does
+  that itself when the controller hands the transaction over.
+- **The link draws no conclusion from a refusal.** Pincer1's decoy never arms or clears the real
+  arrangement, and the daemon is built so it cannot tell a decoy session from a real one
+  (`docs/PROTOCOL.md`). The link shows what the robot reports, in the same words every time, and
+  does not retry or explain a refusal.
+- **One webhook address.** `NOTIFY_WEBHOOK_URL` holds a single URL. Pointing it at Heir replaces
+  whatever was there, and the setup notes say so.
+- **Nothing about check-ins or absence goes into the robot's public peaq heartbeat.**
 
 ## 8. Other observations
 
