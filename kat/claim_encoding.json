@@ -1,0 +1,453 @@
+{
+  "source": "lamport-heir, tools/scripts/claim-kat.ts",
+  "note": "Byte layouts of programs/heir-claim. The program ids are placeholders with no private key until a deployment exists. Addresses made of one repeated byte are artificial.",
+  "program_ids": {
+    "heir_claim": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+    "heir_claim_short_clocks": "HzoHmRyCtxv8nd9u9NpnLTJcJssGJvyvbjeWBY7BMXPD",
+    "vault": "HK1QPbqjkozJHB74QuGaduYzAtqBe9hry3nV64LmpCsb",
+    "vault_short_clocks": "DGe6SeUVApXcN7j3X613SeTmazXGqtAuFSn7RQWBiDDS"
+  },
+  "discriminators": {
+    "init_plan": "c6e7545b7930bf2b",
+    "activate": "c2cb23649737aa52",
+    "claim_sol": "8b71b3bdbe1e84c3",
+    "claim_token": "74ce1bbfa6130049",
+    "plan_account": "a1e7fb77020ca202"
+  },
+  "errors": {
+    "InvalidTerms": 6000,
+    "TermsHashMismatch": 6001,
+    "InvalidContingentDelay": 6002,
+    "SameHeirTwice": 6003,
+    "NotALiveVault": 6004,
+    "HeirNotProven": 6005,
+    "WrongInstructionsSysvar": 6006,
+    "WrongVault": 6007,
+    "VaultNotClosed": 6008,
+    "NotATombstone": 6009,
+    "TombstoneNamesAnother": 6010,
+    "NotActivated": 6011,
+    "NotAnHeir": 6012,
+    "ContingentTooEarly": 6013,
+    "NothingToClaim": 6014,
+    "InvalidTokenProgram": 6015,
+    "NotPlanTokenAccount": 6016,
+    "WrongMint": 6017,
+    "DestinationNotHeirs": 6018,
+    "Overflow": 6019
+  },
+  "terms": [
+    {
+      "name": "a sole heir",
+      "vault": "29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2",
+      "primary": {
+        "kind": 1,
+        "value_hex": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "contingent": {
+        "kind": 0,
+        "value_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "contingent_delay_secs": "0",
+      "encoded_hex": "11111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "terms_hash_hex": "49053a778f30088809d8d5ab0da7124f65e2ecdbaee3edd69333064c88c3d2a2",
+      "plan_address": "EwGgmLUxQzjjf35my2LTdsXS5crQURkZQXgBSnyAL1xa",
+      "plan_address_short_clocks": "HJJYKytYGMzHmwC3jugQLx7fKrwEXvr7mTd29WY2LPjd"
+    },
+    {
+      "name": "a primary and a contingent heir",
+      "vault": "29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2",
+      "primary": {
+        "kind": 1,
+        "value_hex": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "contingent": {
+        "kind": 1,
+        "value_hex": "3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "contingent_delay_secs": "31536000",
+      "encoded_hex": "11111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220133333333333333333333333333333333333333333333333333333333333333338033e10100000000",
+      "terms_hash_hex": "e2409ab502716ef3b5fa53bff9a38e414aa26362dfda8c36a841a06d6db632cb",
+      "plan_address": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+      "plan_address_short_clocks": "D1ZX5n4d9ecoNFeCoa3aLbWoTC36rbgbQj58EsWMcQUz"
+    },
+    {
+      "name": "two hashed heirs",
+      "vault": "29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2",
+      "primary": {
+        "kind": 2,
+        "value_hex": "024e2fccd3db682945ed0aae5fab50f65ea9b7c991014b2917e0b3386d103f78"
+      },
+      "contingent": {
+        "kind": 2,
+        "value_hex": "a908ed40287e7acb68b99bd5a9795fff52d0255c25b3db9008d0fc60ca8a89fc"
+      },
+      "contingent_delay_secs": "2592000",
+      "encoded_hex": "111111111111111111111111111111111111111111111111111111111111111102024e2fccd3db682945ed0aae5fab50f65ea9b7c991014b2917e0b3386d103f7802a908ed40287e7acb68b99bd5a9795fff52d0255c25b3db9008d0fc60ca8a89fc008d270000000000",
+      "terms_hash_hex": "250453195b5204454279527bebc16887566f6c436678e8a827ad60146800dc16",
+      "plan_address": "tGnGVwCXQ6vwgntGmv5AL8RNTkyeknfhEhJMCkK6QuT",
+      "plan_address_short_clocks": "23yNgWPgzKr2rwPY4JwZxAsMJQGV3ozyCg7W7JTkXM3p"
+    },
+    {
+      "name": "a named primary and a hashed contingent heir, the longest delay",
+      "vault": "29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2",
+      "primary": {
+        "kind": 1,
+        "value_hex": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "contingent": {
+        "kind": 2,
+        "value_hex": "a908ed40287e7acb68b99bd5a9795fff52d0255c25b3db9008d0fc60ca8a89fc"
+      },
+      "contingent_delay_secs": "3153600000",
+      "encoded_hex": "111111111111111111111111111111111111111111111111111111111111111101222222222222222222222222222222222222222222222222222222222222222202a908ed40287e7acb68b99bd5a9795fff52d0255c25b3db9008d0fc60ca8a89fc001ef8bb00000000",
+      "terms_hash_hex": "52be0ec8cabe28191ee4d363d73e535c6bcadb20ca517f021ce7ced5bbd42f3c",
+      "plan_address": "3mh3VEF3tWZmTsH7kXasPBK3Br1CNKerU1H7mMGg9RAH",
+      "plan_address_short_clocks": "2eYtYXpKRLztLya4kF6ByNFSZ6h9kTZLFhQGnHTQ2kKk"
+    }
+  ],
+  "heir_commitments": [
+    {
+      "salt_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "address": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+      "commitment_hex": "024e2fccd3db682945ed0aae5fab50f65ea9b7c991014b2917e0b3386d103f78"
+    },
+    {
+      "salt_hex": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "address": "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4",
+      "commitment_hex": "a908ed40287e7acb68b99bd5a9795fff52d0255c25b3db9008d0fc60ca8a89fc"
+    },
+    {
+      "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "address": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+      "commitment_hex": "f4b757a0552242ded680858e204968dc3558e63f5d804602d285ce09d6f7c154"
+    }
+  ],
+  "acceptance_message": {
+    "plan": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+    "text": "Lamport Heir: I control this address and accept being named an heir in plan J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU."
+  },
+  "plan_accounts": [
+    {
+      "name": "fresh",
+      "hex": "a1e7fb77020ca20201fee2409ab502716ef3b5fa53bff9a38e414aa26362dfda8c36a841a06d6db632cb11111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220133333333333333333333333333333333333333333333333333333333333333338033e1010000000000d2496b0000000000000000000000000000000000000000000000000000000000",
+      "bump": 254,
+      "terms": "a primary and a contingent heir",
+      "created_ts": "1800000000",
+      "activated": false,
+      "activated_ts": "0",
+      "closed_slot": "0",
+      "contingent_clock_ts": "0"
+    },
+    {
+      "name": "active",
+      "hex": "a1e7fb77020ca20201fde2409ab502716ef3b5fa53bff9a38e414aa26362dfda8c36a841a06d6db632cb11111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220133333333333333333333333333333333333333333333333333333333333333338033e1010000000000d2496b0000000001007e516c000000000000341200000000000b796c00000000",
+      "bump": 253,
+      "terms": "a primary and a contingent heir",
+      "created_ts": "1800000000",
+      "activated": true,
+      "activated_ts": "1817280000",
+      "closed_slot": "305397760",
+      "contingent_clock_ts": "1819872000"
+    },
+    {
+      "name": "active_hashed",
+      "hex": "a1e7fb77020ca20201ff250453195b5204454279527bebc16887566f6c436678e8a827ad60146800dc16111111111111111111111111111111111111111111111111111111111111111102024e2fccd3db682945ed0aae5fab50f65ea9b7c991014b2917e0b3386d103f7802a908ed40287e7acb68b99bd5a9795fff52d0255c25b3db9008d0fc60ca8a89fc008d27000000000000d2496b00000000010ad2496b000000004d000000000000000ad2496b00000000",
+      "bump": 255,
+      "terms": "two hashed heirs",
+      "created_ts": "1800000000",
+      "activated": true,
+      "activated_ts": "1800000010",
+      "closed_slot": "77",
+      "contingent_clock_ts": "1800000010"
+    }
+  ],
+  "claim_role": [
+    {
+      "name": "nobody claims from a plan that is not activated",
+      "plan": "fresh",
+      "signer": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+      "salt_hex": null,
+      "now": "1800000001",
+      "result": "NotActivated"
+    },
+    {
+      "name": "the primary heir, at once",
+      "plan": "active",
+      "signer": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+      "salt_hex": null,
+      "now": "1817280000",
+      "result": "primary"
+    },
+    {
+      "name": "the contingent heir one second early",
+      "plan": "active",
+      "signer": "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4",
+      "salt_hex": null,
+      "now": "1851407999",
+      "result": "ContingentTooEarly"
+    },
+    {
+      "name": "the contingent heir on the second the delay ends",
+      "plan": "active",
+      "signer": "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4",
+      "salt_hex": null,
+      "now": "1851408000",
+      "result": "contingent"
+    },
+    {
+      "name": "a stranger",
+      "plan": "active",
+      "signer": "5bV6jUfhDHCQVA1WfKBUnXUsboJgoKgkzkKcxr3joew5",
+      "salt_hex": null,
+      "now": "1851494400",
+      "result": "NotAnHeir"
+    },
+    {
+      "name": "a hashed primary heir with the salt",
+      "plan": "active_hashed",
+      "signer": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+      "salt_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "now": "1800000011",
+      "result": "primary"
+    },
+    {
+      "name": "a hashed primary heir without the salt",
+      "plan": "active_hashed",
+      "signer": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+      "salt_hex": null,
+      "now": "1800000011",
+      "result": "NotAnHeir"
+    },
+    {
+      "name": "a hashed primary heir with the other heir's salt",
+      "plan": "active_hashed",
+      "signer": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+      "salt_hex": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "now": "1800000011",
+      "result": "NotAnHeir"
+    },
+    {
+      "name": "a hashed contingent heir, too early",
+      "plan": "active_hashed",
+      "signer": "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4",
+      "salt_hex": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "now": "1802592009",
+      "result": "ContingentTooEarly"
+    },
+    {
+      "name": "a hashed contingent heir, in time",
+      "plan": "active_hashed",
+      "signer": "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4",
+      "salt_hex": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "now": "1802592010",
+      "result": "contingent"
+    }
+  ],
+  "instructions": [
+    {
+      "name": "init_plan, the payer is the primary heir",
+      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "data_hex": "c6e7545b7930bf2b49053a778f30088809d8d5ab0da7124f65e2ecdbaee3edd69333064c88c3d2a211111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "accounts": [
+        {
+          "pubkey": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "pubkey": "EwGgmLUxQzjjf35my2LTdsXS5crQURkZQXgBSnyAL1xa",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "pubkey": "Sysvar1nstructions1111111111111111111111111",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "pubkey": "11111111111111111111111111111111",
+          "signer": false,
+          "writable": false
+        }
+      ]
+    },
+    {
+      "name": "init_plan, both heirs sign beside the payer",
+      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "data_hex": "c6e7545b7930bf2be2409ab502716ef3b5fa53bff9a38e414aa26362dfda8c36a841a06d6db632cb11111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220133333333333333333333333333333333333333333333333333333333333333338033e10100000000",
+      "accounts": [
+        {
+          "pubkey": "6k78AbasGMFFrhG95Pj6jQbqkVt7FQMhVgemxJovWKR6",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "pubkey": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "pubkey": "Sysvar1nstructions1111111111111111111111111",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "pubkey": "11111111111111111111111111111111",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "pubkey": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+          "signer": true,
+          "writable": false
+        },
+        {
+          "pubkey": "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4",
+          "signer": true,
+          "writable": false
+        }
+      ]
+    },
+    {
+      "name": "activate",
+      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "data_hex": "c2cb23649737aa52",
+      "accounts": [
+        {
+          "pubkey": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2",
+          "signer": false,
+          "writable": false
+        }
+      ]
+    },
+    {
+      "name": "claim_sol, no salt",
+      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "data_hex": "8b71b3bdbe1e84c300",
+      "accounts": [
+        {
+          "pubkey": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+          "signer": true,
+          "writable": true
+        }
+      ]
+    },
+    {
+      "name": "claim_sol, with a salt",
+      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "data_hex": "8b71b3bdbe1e84c301a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "accounts": [
+        {
+          "pubkey": "tGnGVwCXQ6vwgntGmv5AL8RNTkyeknfhEhJMCkK6QuT",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+          "signer": true,
+          "writable": true
+        }
+      ]
+    },
+    {
+      "name": "claim_token, close the account",
+      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "data_hex": "74ce1bbfa61300490001",
+      "accounts": [
+        {
+          "pubkey": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "pubkey": "93MB2qRDNVLxbmmPuYpLdAqn3u2x9ZhaVZK5wELHueP8",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "97GUB8tDxneBjs1uLr9Fv3cYJ4F9pdPQ3xyjzcNteyhq",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "7tj9biW3KRJ7EEWmVUGigHiouCTXhV2dzcyvwma7Cyu7",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "pubkey": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "signer": false,
+          "writable": false
+        }
+      ]
+    },
+    {
+      "name": "claim_token, Token-2022, with a salt, keep the account, one extra account",
+      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "data_hex": "74ce1bbfa613004901b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b200",
+      "accounts": [
+        {
+          "pubkey": "tGnGVwCXQ6vwgntGmv5AL8RNTkyeknfhEhJMCkK6QuT",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "pubkey": "93MB2qRDNVLxbmmPuYpLdAqn3u2x9ZhaVZK5wELHueP8",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "97GUB8tDxneBjs1uLr9Fv3cYJ4F9pdPQ3xyjzcNteyhq",
+          "signer": false,
+          "writable": true
+        },
+        {
+          "pubkey": "7tj9biW3KRJ7EEWmVUGigHiouCTXhV2dzcyvwma7Cyu7",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "pubkey": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "signer": false,
+          "writable": false
+        },
+        {
+          "pubkey": "9BBmKSMEZ5wQsxGQn9UBCvPJYDTMVh5DcNeQ3zRVQK2Y",
+          "signer": false,
+          "writable": false
+        }
+      ]
+    }
+  ]
+}

@@ -32,6 +32,8 @@ solana-sha256-hasher = { version = "2.3", default-features = false }
 
 [dev-dependencies]
 hex = "0.4"
+# reads kat/claim_encoding.json, the vectors shared with the TypeScript client
+serde_json = "1"
 
 # The toolchain lamport-vault pins: platform-tools v1.48 (bundled with Agave 2.3) cannot compile
 # edition-2024 dependencies; v1.56 can. cargo-build-sbf reads this key.

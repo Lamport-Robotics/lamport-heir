@@ -687,6 +687,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "hex",
+ "serde_json",
  "solana-sha256-hasher",
 ]
 
