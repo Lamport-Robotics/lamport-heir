@@ -21,6 +21,11 @@ The claim program has the vault program's id compiled in (`VAULT_PROGRAM_ID` in
 `programs/heir-claim/src/lib.rs`): it believes a tombstone only from that program. The two ids
 therefore change together.
 
+The `short-clocks` builds are a second pair, for tests on a local validator and on devnet: a day
+lasts one second in both, each has its own id, and the `short-clocks` claim program believes the
+`short-clocks` vault and no other. Neither can stand in for a real program. The tools know the two
+pairs (`tools/src/programs.ts`) and tell them apart by the program that owns a vault.
+
 ## Before devnet
 
 A deployment needs real keypairs, and those are the project owner's to generate and keep. The

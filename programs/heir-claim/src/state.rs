@@ -11,10 +11,18 @@ pub const TERMS_DOMAIN: &[u8] = b"lamport-heir/plan/v1";
 /// Domain of a hashed heir: `sha256(HEIR_DOMAIN || salt[32] || address[32])`.
 pub const HEIR_DOMAIN: &[u8] = b"lamport-heir/heir/v1";
 
+/// Seconds in one day of this program's clock: 86 400.
+#[cfg(not(feature = "short-clocks"))]
+pub const DAY_SECS: u64 = 86_400;
+/// Seconds in one day of this program's clock, in a `short-clocks` test build: one. The limits
+/// below keep their numbers and shrink with it, as the vault's do.
+#[cfg(feature = "short-clocks")]
+pub const DAY_SECS: u64 = 1;
+
 /// Shortest contingent delay, 30 days: the primary heir always gets that long alone.
-pub const MIN_CONTINGENT_DELAY_SECS: u64 = 30 * 86_400;
+pub const MIN_CONTINGENT_DELAY_SECS: u64 = 30 * DAY_SECS;
 /// Longest contingent delay, 100 years. It also keeps the clock arithmetic far from overflow.
-pub const MAX_CONTINGENT_DELAY_SECS: u64 = 100 * 365 * 86_400;
+pub const MAX_CONTINGENT_DELAY_SECS: u64 = 100 * 365 * DAY_SECS;
 
 /// Who an heir is: nobody, an address, or the salted hash of one.
 ///

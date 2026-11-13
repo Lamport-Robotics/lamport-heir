@@ -20,6 +20,10 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
+# A test build for devnet in which a day lasts one second, so a contingent delay runs out during a
+# test. It declares its own program id and believes the vault's `short-clocks` build, and no other:
+# it can never stand in for the real program (docs/program-ids.md).
+short-clocks = []
 
 [dependencies]
 anchor-lang = "0.32.1"
