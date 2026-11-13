@@ -271,9 +271,9 @@ Three properties follow from these rules, and the property tests will pin each:
 
 - Nothing is released sooner than `window_secs + wait_secs` after the owner's last signed action:
   at least 120 days, 425 by default.
-- Whatever order a check-in or signed action and a `start_succession` land in, the vault ends with
-  no waiting period open. If the owner's transaction lands first, the deadline has moved and the
-  start fails; if the start lands first, the owner's transaction cancels it.
+- Whatever order a valid check-in or signed action and a `start_succession` land in, the vault ends
+  with no waiting period open. If the owner's transaction lands first, the deadline has moved and
+  the start fails; if the start lands first, the owner's transaction cancels it.
 - A stolen check-in key delays a release by at most two years past the last signed action, plus the
   contact's one extension.
 
@@ -582,9 +582,9 @@ None of these is a vulnerability; they are corners Heir has to handle or report.
   which needs no signer. That is read from the token program's source, not yet run here; the
   per-extension tests will run it, and the finisher and claim script will harvest first.
 - **Closing a small vault to an empty address.** An H5 vault holding nothing above its rent pays out
-  313 200 lamports on `Close`, less than the 890 880 a new system account needs, so the transaction
-  fails until the destination is funded. With the succession block the payout is always above the
-  minimum.
+  313 200 lamports on `Close`, less than the 890 880 a new system account needs, so by the rent
+  rules the transaction should fail until the destination is funded. Computed from the account
+  sizes, not run. With the succession block the payout is always above the minimum.
 - **Durations need a ceiling.** The spec gives floors only. A window near `u64::MAX` overflows the
   deadline. I will cap window and wait at 100 years unless you want something tighter.
 - **Nothing should be sent straight to a plan account.** SOL that reaches a plan whose vault later
