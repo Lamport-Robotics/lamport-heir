@@ -647,3 +647,37 @@ None of these is a vulnerability; they are corners Heir has to handle or report.
 - This note, and the model behind section 4.4.
 
 Nothing in milestone 0 changes what any program does.
+
+## 10. Milestone 2 results
+
+- lamport-vault [pull request 5](https://github.com/Lamport-Robotics/lamport-vault/pull/5): the
+  succession clock behind the feature. `docs/SUCCESSION.md` in that repository is its reference.
+  All 24 checks pass at `c7f1710`:
+
+  | suite | `main` | default build | with `succession` |
+  |---|---|---|---|
+  | `cargo test --workspace` | 65 | 65 | 79, and 74 with `short-clocks` |
+  | SDK | 275 | 303 (28 new) | the same run |
+  | localnet suite | 42 passed, 2 skipped | 42 passed, 2 skipped | 50 passed, 2 skipped |
+  | localnet suite with `small-history` | 44 | 44 | 52 |
+  | LiteSVM | 5 | 5 | 43 |
+  | fuzz targets | 5 | 5 | 7 |
+  | mutation check | | | 38 of 38 mutants caught |
+
+  The gate built each program at the pull request and at `main`: `lamport_vault.so` is
+  `b9c055c3…2a563b` both times and `pq_registry.so` is `95af8d50…22a118` both times, the hashes in
+  `docs/VERIFY.md`. The build with the feature is `9d1bb156…0060f8`, 385 744 bytes.
+- The cold signer (`web/signer.html`) built from that branch is the file `main` builds, byte for
+  byte, apart from the commit it prints. The first version of the SDK change added 299 bytes of
+  unused code to it; that was found by building both and comparing, and removed.
+- What was built differently from this note, and what the Token-2022 tests found:
+  [`decisions.md`](decisions.md), "Milestone 2".
+
+One thing came up that this note did not foresee. A vault can name, as its claim address, a plan
+that was made for a *different* vault. The vault program cannot tell: it does not know the claim
+program's accounts, and must not. The release would go to that plan, and the plan can only be
+activated by the vault in its own terms, so what it received could not be claimed. Nothing in the
+programs is wrong and nothing is lost by accident, but whatever builds a `SetSuccession` has to
+check the plan's terms against the vault before the owner signs. The tools read this and flag it
+(milestone 3); the app must refuse it (milestone 4).
+
