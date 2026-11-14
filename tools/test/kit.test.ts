@@ -77,6 +77,13 @@ describe("a kit is checked against the terms before it is printed", () => {
     expect(() => renderKit(input({ terms: undefined as never, claim: contingent }))).toThrow(/not this heir's address/);
     const { terms: _terms, ...direct } = input({ claim: primary });
     expect(() => renderKit({ ...direct, salt })).toThrow(/straight to an address/);
+    // the private heir's salt, given for the kit of the heir the same plan names openly: it would print
+    // that salt, and a fingerprint the plan does not hold, on the wrong person's page
+    const mixed: Terms = { vault, primary: { kind: "address", address: primary }, contingent: hashedHeir(salt, contingent), contingentDelaySecs: 365n * DAY };
+    expect(() => renderKit(input({ terms: mixed, claim: planAddress(mixed), heirAddress: primary, salt }))).toThrow(/they have no salt/);
+    expect(renderKit(input({ terms: mixed, claim: planAddress(mixed), heirAddress: primary }))).not.toContain("Your salt");
+    expect(renderKit(input({ terms: mixed, claim: planAddress(mixed), heirAddress: contingent, salt }))).toContain("Your salt");
+    expect(() => renderKit(input({ salt }))).toThrow(/they have no salt/);
   });
 });
 

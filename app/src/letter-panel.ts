@@ -66,7 +66,10 @@ export function letterPanel(ctx: HeirCtx, plan: Promise<Terms | null>): HTMLElem
       if (typeof line === "string") field.value = line;
       return { ...h, field };
     });
-    const text = el("textarea", { id: "ltext", rows: "10", maxlength: String(MAX_LETTER_CHARS), spellcheck: "true" });
+    // what is typed here must not leave the browser before it is sealed: a browser's spell check can send a
+    // field's text to its maker, and so can a writing-aid extension, so the field asks for neither, and the
+    // browser is asked not to keep it for a restored session
+    const text = el("textarea", { id: "ltext", rows: "10", maxlength: String(MAX_LETTER_CHARS), spellcheck: "false", autocomplete: "off", autocorrect: "off", autocapitalize: "off", "data-gramm": "false", "data-gramm_editor": "false", "data-enable-grammarly": "false", "data-lt-active": "false" });
     const seal = el("button", { class: "btn primary", type: "button", id: "lseal" }, "Seal the letter");
     const warn = el("div", { class: "notice warn hidden", id: "lwarn" });
     const err = el("div", { class: "err hidden", id: "lerr" });
@@ -78,7 +81,7 @@ export function letterPanel(ctx: HeirCtx, plan: Promise<Terms | null>): HTMLElem
         el("div", { class: "actions" }, cp)),
       ...boxes.map((h) => el("label", { class: "field" }, el("span", {}, `Reading key from the ${h.who} heir · ${short(h.address.toBase58(), 6)}${heirs.length > 1 ? " · leave empty to write to the other heir only" : ""}`), h.field)),
       el("label", { class: "field" }, el("span", {}, "The letter"), text),
-      el("p", { class: "quiet", style: "font-size:12.5px" }, "This page keeps no copy of the letter, and nobody can open a sealed one for you: keep your own copy if you want to change it later. An heir who has the sealed file can read it at once, not only after a release. To have it read only later, keep the file with your papers."),
+      el("p", { class: "quiet", style: "font-size:12.5px" }, "Spell check is off in this field on purpose: some browsers send what they check to their maker. This page keeps no copy of the letter, and nobody can open a sealed one for you: keep your own copy if you want to change it later. An heir who has the sealed file can read it at once, not only after a release. To have it read only later, keep the file with your papers."),
       warn, err, el("div", { class: "actions" }, seal), out);
 
     // the warnings the owner has read and answered, for exactly this text

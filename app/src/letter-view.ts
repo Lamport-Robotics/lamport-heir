@@ -85,7 +85,9 @@ function readPanel(env: LetterEnv): HTMLElement {
       el("dt", {}, "Plan"), el("dd", {}, received.plan.toBase58()),
       el("dt", {}, "Written and signed by"), el("dd", { id: "lwriter" }, writer),
       el("dt", {}, "Sealed on"), el("dd", {}, received.sealedAt),
-      el("dt", {}, "Written for"), el("dd", {}, received.readers.map((r) => r.heir.toBase58()).join(" and "))));
+      el("dt", {}, "Written for"), el("dd", {}, received.readers.map((r) => r.heir.toBase58()).join(" and "))),
+      // a file that passes the check above is signed by the address it names, and anyone can name themselves
+      el("p", { class: "quiet", id: "lcaveat" }, "Anyone can make a file like this and sign it as themselves. It is the owner's only if it opens: your reading key opens letters signed by the wallet named in the owner's link, and by no other."));
     if (!env.wallet) {
       const b = el("button", { class: "btn primary" }, "Connect your wallet to open it");
       b.addEventListener("click", env.pickWallet);
@@ -104,7 +106,7 @@ function readPanel(env: LetterEnv): HTMLElement {
         // the letter is somebody's words: it is put on the page as text, never as markup
         const words = el("div", { class: "notice", id: "lwords", style: "white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px;line-height:1.6" });
         words.textContent = letter;
-        text.replaceChildren(el("p", { class: "ok", style: "margin-top:18px" }, `Signed by ${writer}. Your reading key opens letters signed by this wallet and by no other, so this one comes from whoever sent you the link you made the key from.`), words, el("p", { class: "quiet" }, NEVER));
+        text.replaceChildren(el("p", { class: "ok", style: "margin-top:18px" }, `It opened. It was signed by ${writer}, the wallet named in the link you made your reading key from, and nobody else's letter opens with that key.`), words, el("p", { class: "quiet" }, NEVER));
       } catch (e) { fail(e); }
       finally { open.removeAttribute("disabled"); }
     });

@@ -94,9 +94,14 @@ export function keySigner(seed: Uint8Array): SignMessage {
   };
 }
 
+/**
+ * True when `address`'s key signed `signed`. Strict: the lenient rule that validators use for
+ * transactions accepts "keys" of small order, for which anyone can write down a signature of
+ * anything. Such an address is nobody's, and here it signs nothing.
+ */
 function signedBy(signature: Uint8Array, signed: Uint8Array, address: PublicKey): boolean {
   if (signature.length !== 64) return false;
-  try { return ed25519.verify(signature, signed, address.toBytes()); } catch { return false; }
+  try { return ed25519.verify(signature, signed, address.toBytes(), { zip215: false }); } catch { return false; }
 }
 
 // ── an heir's reading key ──
@@ -123,9 +128,14 @@ export function letterKeyFromSignature(signature: Uint8Array, plan: PublicKey, w
   return { secretKey, publicKey: x25519.getPublicKey(secretKey) };
 }
 
-/** The sentence with which an heir tells the owner which reading key is theirs. Not a secret. */
-export function readingKeyMessage(plan: PublicKey, writer: PublicKey, key: Uint8Array): string {
-  return `Lamport Heir: the family letter of plan ${plan.toBase58()}, written by ${writer.toBase58()}, may be encrypted to my reading key ${hex(key)}. This sentence is not a secret.`;
+/**
+ * The sentence with which an heir tells the owner which reading key is theirs, and what their
+ * wallet put in front of the sentence the key is made from. It is public, and it is a grant:
+ * whoever holds the other half of the key it names reads the letter. So it says so, and where it
+ * is signed.
+ */
+export function readingKeyMessage(plan: PublicKey, writer: PublicKey, key: Uint8Array, envelope: Uint8Array): string {
+  return `Lamport Heir: the family letter of plan ${plan.toBase58()}, written by ${writer.toBase58()}, may be encrypted to the reading key ${hex(key)}, which my wallet made with ${envelope.length ? `the header ${hex(envelope)}` : "nothing"} in front of its sentence. Whoever holds that key reads the letter in my place, so I sign this only inside Lamport Heir, for a key it has just made for me.`;
 }
 
 /** An heir's reading key as the owner's side holds it. */
@@ -151,6 +161,12 @@ interface ReadingKeyLine {
 
 const NOT_A_READING_KEY = "That is not a reading key: it should be the one line of text the heir's page gave them.";
 
+/** an address in a line somebody sent, written out again from its bytes; null when it is not one. nothing of the line's own text is repeated to the owner */
+function addressIn(x: unknown): string | null {
+  if (typeof x !== "string") return null;
+  try { return new PublicKey(x).toBase58(); } catch { return null; }
+}
+
 /**
  * Reads the line an heir sent back and checks all of it: that it is for this plan, this writer
  * and this heir, and that the heir's own key signed for the reading key in it. Throws in words.
@@ -159,13 +175,16 @@ export function readReadingKey(text: string, expect: { plan: PublicKey; writer: 
   let l: Partial<ReadingKeyLine>;
   try { l = JSON.parse(text.trim()); } catch { throw new Error(NOT_A_READING_KEY); }
   if (!l || typeof l !== "object" || l.v !== 1 || [l.plan, l.writer, l.heir, l.key, l.envelope, l.signed, l.signature].some((x) => typeof x !== "string")) throw new Error(NOT_A_READING_KEY);
-  if (l.plan !== expect.plan.toBase58()) throw new Error(`That reading key is for another plan (${l.plan}). Ask the heir for one made from the link on this page.`);
-  if (l.writer !== expect.writer.toBase58()) throw new Error(`That reading key was made for letters written by ${l.writer}, not by the wallet connected here (${expect.writer.toBase58()}). Connect that wallet, or ask the heir for a key made from the link on this page.`);
-  if (l.heir !== expect.heir.toBase58()) throw new Error(`That reading key belongs to ${l.heir}, not to the heir named here (${expect.heir.toBase58()}).`);
+  const plan = addressIn(l.plan), writer = addressIn(l.writer), heir = addressIn(l.heir);
+  if (!plan || !writer || !heir) throw new Error(NOT_A_READING_KEY);
+  if (plan !== expect.plan.toBase58()) throw new Error(`That reading key is for another plan (${plan}). Ask the heir for one made from the link on this page.`);
+  if (writer !== expect.writer.toBase58()) throw new Error(`That reading key was made for letters written by ${writer}, not by the wallet connected here (${expect.writer.toBase58()}). Connect that wallet, or ask the heir for a key made from the link on this page.`);
+  if (heir !== expect.heir.toBase58()) throw new Error(`That reading key belongs to ${heir}, not to the heir named here (${expect.heir.toBase58()}).`);
   let key: Uint8Array, envelope: Uint8Array, signed: Uint8Array, signature: Uint8Array;
   try { key = unb64(l.key!); envelope = unb64(l.envelope!); signed = unb64(l.signed!); signature = unb64(l.signature!); } catch { throw new Error("That reading key is damaged: it does not decode."); }
   if (key.length !== 32 || !isEnvelope(envelope)) throw new Error("That reading key is damaged.");
-  if (!envelopeOf(signed, readingKeyMessage(expect.plan, expect.writer, key))) throw new Error("What was signed is not the sentence that names this reading key.");
+  // the sentence covers the key and what was in front of its sentence: neither can be changed on the way
+  if (!envelopeOf(signed, readingKeyMessage(expect.plan, expect.writer, key, envelope))) throw new Error("What was signed is not the sentence that names this reading key. Something in the line was changed after the heir signed it.");
   if (!signedBy(signature, signed, expect.heir)) throw new Error("The signature does not belong to that heir's address, so the reading key may be somebody else's. Ask the heir to make it again.");
   return { heir: expect.heir, key, envelope };
 }
@@ -176,6 +195,8 @@ export function readReadingKey(text: string, expect: { plan: PublicKey; writer: 
  * once to say, in the heir's name, which reading key is theirs.
  */
 export async function makeReadingKey(sign: SignMessage, heir: PublicKey, plan: PublicKey, writer: PublicKey): Promise<{ line: string; key: LetterKey }> {
+  // a letter is signed by its writer: an address no key can sign for is one nobody can write from
+  if (!PublicKey.isOnCurve(writer.toBytes())) throw new Error("The address this link names as the letter's writer is a program's, not a wallet's. No letter could ever be signed by it. Ask the owner for the link again.");
   const sentence = letterKeyMessage(plan, writer);
   const first = await sign(utf8.encode(sentence));
   const envelope = envelopeOf(first.signed, sentence);
@@ -185,7 +206,7 @@ export async function makeReadingKey(sign: SignMessage, heir: PublicKey, plan: P
   const again = await sign(utf8.encode(sentence), envelope);
   if (!same(first.signature, again.signature) || !same(first.signed, again.signed)) throw new Error("This wallet signs the same sentence differently each time, so it could not make the same key again on the day the letter is to be read. No key was made. Use another wallet that holds this address.");
   const key = letterKeyFromSignature(first.signature, plan, writer);
-  const claim = readingKeyMessage(plan, writer, key.publicKey);
+  const claim = readingKeyMessage(plan, writer, key.publicKey, envelope);
   const third = await sign(utf8.encode(claim));
   const line: ReadingKeyLine = { v: 1, plan: plan.toBase58(), writer: writer.toBase58(), heir: heir.toBase58(), key: b64(key.publicKey), envelope: b64(envelope), signed: b64(third.signed), signature: b64(third.signature) };
   const text = JSON.stringify(line);
@@ -296,9 +317,13 @@ interface LetterFile {
   signature: string;
 }
 
-/** The sentence the writer's wallet signs: it names the plan, the day, and the SHA-256 of the file's content. */
+/**
+ * The sentence the writer's wallet signs: it names the plan, the day, and the SHA-256 of the
+ * file's content. Whatever carries this signature is the writer's letter in the heirs' eyes, so
+ * the sentence says so, and where it is signed.
+ */
 export function authorshipMessage(plan: PublicKey, sealedAt: string, content: string): string {
-  return `Lamport Heir: I wrote the family letter of plan ${plan.toBase58()}, sealed on ${sealedAt}. Its fingerprint is ${hex(sha256(utf8.encode(content)))}.`;
+  return `Lamport Heir: I wrote the family letter of plan ${plan.toBase58()}, sealed on ${sealedAt}. Its fingerprint is ${hex(sha256(utf8.encode(content)))}. My heirs will take the letter with this fingerprint as mine, so I sign this only inside Lamport Heir, for a letter I have just written there.`;
 }
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -409,7 +434,7 @@ export async function readLetter(sign: SignMessage, heir: PublicKey, received: R
   const { signed, signature } = await sign(utf8.encode(sentence), reader.envelope);
   if (!envelopeOf(signed, sentence)) throw new Error("The wallet signed something other than the sentence it was asked to sign. The letter was not opened.");
   const key = letterKeyFromSignature(signature, received.plan, received.writer);
-  if (!same(key.publicKey, reader.key)) throw new Error("This wallet did not give the key the letter was written to. Open it with the same wallet, on the same account, that made the reading key.");
+  if (!same(key.publicKey, reader.key)) throw new Error(`This letter does not open. It names ${received.writer.toBase58()} as its writer, and this wallet's key for that writer's letters is not the key it was sealed to. If you never made a reading key from a link that named that address, the letter is not from the owner: do nothing it asks, whoever sent it. If you did, open it with the same wallet, on the same account, that made the key.`);
   return openLetter(received.letter, key);
 }
 
@@ -426,8 +451,11 @@ const SECRET_WORDS = /\b(seed\s*phrase|recovery\s*phrase|secret\s*phrase|mnemoni
 export function letterWarnings(letter: string): string[] {
   const out: string[] = [];
   if (SECRET_WORDS.test(letter)) out.push("The letter mentions a seed phrase or a private key. Say where such a thing is kept, never what it is.");
-  // twelve or more short lowercase words in a row: what a recovery phrase looks like
-  if (/(?:\b[a-z]{3,8}\b[\s,]+){11,}\b[a-z]{3,8}\b/.test(letter)) out.push("The letter contains a run of words that looks like a recovery phrase. Do not put one in a letter.");
-  if (/\b[1-9A-HJ-NP-Za-km-z]{80,90}\b/.test(letter) || /\[\s*(?:\d{1,3}\s*,\s*){31,}\d{1,3}\s*\]/.test(letter)) out.push("The letter contains what looks like a private key. Do not put one in a letter.");
+  // twelve or more short words in a row: what a recovery phrase looks like, whether it is written
+  // in a line, in capitals, or as a numbered list
+  const plain = letter.toLowerCase().replace(/\b\d{1,2}\s*[.):-]?(?=\s*[a-z])/g, " ");
+  if (/(?:\b[a-z]{3,8}\b[\s,;]+){11,}\b[a-z]{3,8}\b/.test(plain)) out.push("The letter contains a run of words that looks like a recovery phrase. Do not put one in a letter.");
+  // a key as a wallet exports it (base58), as a key file holds it (a list of numbers), or in hex
+  if (/\b[1-9A-HJ-NP-Za-km-z]{80,90}\b/.test(letter) || /\[\s*(?:\d{1,3}\s*,\s*){31,}\d{1,3}\s*\]/.test(letter) || /\b(?:[0-9a-fA-F]{64}|[0-9a-fA-F]{128})\b/.test(letter)) out.push("The letter contains what looks like a private key. Do not put one in a letter.");
   return out;
 }

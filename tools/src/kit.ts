@@ -96,6 +96,8 @@ export function renderKit(input: KitInput): string {
   const role = kitRole(input);
   const hashedHeir = input.terms !== undefined && (role === "primary" ? input.terms.primary : input.terms.contingent).kind === "hashed";
   if (hashedHeir && !input.salt) throw new Error("this heir is named by a salted hash: the kit must print the salt");
+  // a salt on the page of an heir who has none is another heir's, and this page would hand it to the wrong person
+  if (input.salt && !hashedHeir) throw new Error("the plan names this heir by address, so they have no salt: the salt given belongs to the heir the plan keeps private, and goes on that heir's kit only");
   const vault = input.vault.toBase58();
   const claim = input.claim.toBase58();
   const heir = input.heirAddress.toBase58();
@@ -207,7 +209,7 @@ cd tools &amp;&amp; npm ci</pre></li>
 ${
   input.terms && !hashedHeir
     ? `<h2>If the owner left you a letter</h2>
-<p>The owner may have written a letter for their heirs: where other accounts are, who to call, where the papers are. It is a file whose name begins <code>lamport-heir-letter</code>. Only the heirs can read it, and nobody but the owner can have made it. Read it with the same key file:</p>
+<p>The owner may have written a letter for their heirs: where other accounts are, who to call, where the papers are. It is a file whose name begins <code>lamport-heir-letter</code>. Only the heirs can read it, and it opens only if it was signed by the wallet you made your reading key for. Read it with the same key file:</p>
 <pre>${esc(`${tool} letter-open THE-LETTER-FILE --keypair YOUR-KEY-FILE`)}</pre>
 <p>A family letter never asks you for money, a key or a seed phrase. If one does, it is not what it seems.</p>
 `

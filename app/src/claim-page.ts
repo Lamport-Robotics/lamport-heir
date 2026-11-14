@@ -51,7 +51,7 @@ function paintWallet() {
   const box = $("#walletbox"); box.innerHTML = "";
   if (wallet) {
     const off = el("button", { class: "link quiet" }, "Disconnect");
-    off.addEventListener("click", () => { wallet = null; paintWallet(); route(); });
+    off.addEventListener("click", () => { wallet = null; salts.clear(); paintWallet(); route(); });
     box.append(el("span", {}, el("span", { class: "dot" }), short(wallet.publicKey.toBase58())), off);
     return;
   }

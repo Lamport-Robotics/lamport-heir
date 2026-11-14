@@ -205,6 +205,9 @@ describe("the pages, in a browser, on a local validator", () => {
     await owner.click("#lseal");
     await owner.waitForSelector("#lerr:not(.hidden)");
     expect(await owner.locator("#lerr").innerText()).toMatch(/first heir's reading key: What was signed is not the sentence that names this reading key/);
+    // the letter's words are not offered to a spelling service, which in some browsers is a server
+    expect(await owner.getAttribute("#ltext", "spellcheck")).toBe("false");
+    expect(await owner.getAttribute("#ltext", "autocomplete")).toBe("off");
     await owner.fill("#hletter textarea[data-reader]", readingKey);
     await owner.click("#lseal"); // the letter mentions a seed phrase: the owner is told, and nothing is sealed yet
     await owner.waitForSelector("#lwarn:not(.hidden)");
@@ -230,6 +233,7 @@ describe("the pages, in a browser, on a local validator", () => {
     await heir.setInputFiles("#lfilein", { name: download.suggestedFilename(), mimeType: "application/json", buffer: Buffer.from(sealedFile) });
     await heir.waitForSelector("#lopen");
     expect(await heir.locator("#lwriter").innerText()).toBe(ownerWallet.toBase58());
+    expect(await heir.locator("#lcaveat").innerText()).toMatch(/It is the owner's only if it opens/);
     await heir.click("#lopen");
     await heir.waitForSelector("#lwords");
     expect(await heir.locator("#lwords").evaluate((n) => n.textContent)).toBe(LETTER);

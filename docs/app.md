@@ -116,17 +116,20 @@ can read and that only the owner's wallet can have made. No server holds it. The
 
 1. **Each heir makes a reading key.** The owner sends a link, `claim.html#letter=<plan>&from=<the
    owner's wallet>`. A wallet signs messages and decrypts nothing, so the heir's key is derived
-   from their wallet's signature over a sentence that names the plan and the owner's wallet. The
-   same wallet gives the same signature years later, so nothing has to be kept. The page asks for
-   that signature twice and refuses a wallet that answers differently the second time: such a
-   wallet could not make the key again on the day the letter is read. A third signature tells the
-   owner, in the heir's name, which public key is theirs. The heir sends back one line of text,
-   which is not a secret.
+   from their wallet's signature over a sentence that names the plan and the owner's wallet. A
+   wallet that signs the same bytes gives the same signature years later, so nothing has to be
+   kept. The page asks for that signature twice and refuses a wallet that answers differently the
+   second time: such a wallet could not make the key again on the day the letter is read. A third
+   signature tells the owner, in the heir's name, which public key is theirs and what the wallet
+   put in front of the sentence when it signed. The heir sends back one line of text, which is
+   not a secret.
 2. **The owner writes and seals.** The page checks each line (this plan, this wallet, that heir's
-   own signature), warns if the text reads like a seed phrase or a key and seals only when the
-   owner presses again, encrypts the letter in the browser, and has the owner's wallet sign a
-   sentence that holds the SHA-256 of everything in the file. The page keeps the heirs' lines,
-   which are public, and no copy of the letter.
+   own signature over everything else in it), warns if the text reads like a seed phrase or a key
+   and seals only when the owner presses again, encrypts the letter in the browser, and has the
+   owner's wallet sign a sentence that holds the SHA-256 of everything in the file. The page
+   keeps the heirs' lines, which are public, and no copy of the letter. The field the letter is
+   typed in asks the browser for no spell check and no saved form data: some browsers send what
+   they spell-check to their maker, which would be the letter leaving the device unsealed.
 3. **An heir reads.** `claim.html#letter`, or `letter-open` in the command-line tool: choose the
    file. Before anything in it is believed, the page checks that the wallet it names as its writer
    signed exactly this. Then the heir's wallet makes the key again and the letter is shown, as
@@ -137,10 +140,23 @@ something anyone can encrypt to, so without more the heirs' page would show a st
 under the words "the family letter". Two things stand in the way. The file is signed, so a letter
 that names the owner's wallet as its writer needs the owner's wallet. And the reading key is made
 from a sentence that names the writer, so a letter that names any other writer asks the heir's
-wallet for another sentence, which gives a key nobody ever encrypted to: it does not open. What
-remains is an heir who is talked into making a reading key for a stranger's wallet; the page says
-to make one only when the owner themselves sent the link, and every letter is shown with its
-writer's address and the line that a family letter never asks for money, a key or a seed phrase.
+wallet for another sentence, which gives a key nobody ever encrypted to: it does not open, and
+the refusal says that a letter from a writer the heir never made a key for is not the owner's.
+Signatures are checked strictly: an address of small order, for which anyone can write down a
+signature, signs nothing.
+
+This holds on two conditions that code cannot enforce, and the sentences themselves say both:
+
+- **The owner's wallet signs the authorship sentence nowhere but here.** A site that got the
+  owner's wallet to sign that one sentence, for a letter of the site's making, would hold a
+  letter that opens. The sentence says what the signature means and that it is signed only inside
+  Lamport Heir.
+- **An heir makes a reading key only for the owner.** An heir talked into making one from a
+  stranger's link has given that stranger a way to write to them, and an heir talked into signing
+  the sentence that names a reading key, with a stranger's key in it, has given that stranger the
+  owner's letters. The page says to make a key only when the owner themselves sent the link, and
+  every letter is shown with its writer's address and the line that a family letter never asks
+  for money, a key or a seed phrase.
 
 What the owner should know, and is told on the page:
 
@@ -153,7 +169,14 @@ What the owner should know, and is told on the page:
   asks the heirs for new keys.
 - **A wallet that changes how it signs** loses the heir that key: the letter then has to be sealed
   again, which needs the owner. The file records what the heir's wallet put in front of the
-  sentence, if anything, so that the command-line tool can make the same key from the key itself.
+  sentence, if anything, under the heir's own signature, so that the command-line tool can make
+  the same key from a key file. That helps an heir who can get at the key itself, and not one
+  whose key never leaves a hardware wallet.
+- **The page cannot stop other software from reading the field**: an extension that reads pages,
+  or a keyboard that sends what is typed, sees the letter before it is sealed.
+- **The check for a seed phrase or a key is a guess** from how text looks. It catches a run of
+  short words, a numbered or capitalised list of them, and a key in the usual spellings, and it
+  can miss one written some other way.
 
 Heirs kept private cannot be written to from the page: it does not know their address.
 
@@ -171,7 +194,7 @@ wallet the heir made their key for.
 | what the heirs' page says, phase by phase, to the trusted contact, and to an heir kept private | `app/test/heir-words.test.ts` | 15 |
 | the vault's own request code with this repository's module in its seam, as the signer is built | `app/test/signer-seam.test.ts` | 4 |
 | the link that asks an heir for a reading key | `app/test/letter-view.test.ts` | 2 |
-| the letter itself: keys, the file, forgeries, refusals | `tools/test/letter.test.ts`, `tools/test/cli.test.ts` | 18 + 2 |
+| the letter itself: keys, the file, forgeries, refusals | `tools/test/letter.test.ts`, `tools/test/cli.test.ts` | 25 + 2 |
 
 The tests run with the same alias and constants as the build, so they see the SDK the way the
 built pages do.
@@ -186,7 +209,7 @@ validator, and a headless Chromium clicks through them:
 | owner | creates a vault; names an heir | the plan cannot be created before the heir accepts; a damaged acceptance is refused |
 | heir | opens the owner's link, signs the sentence | their page says which vault and which place |
 | owner | creates the plan, makes a check-in key, signs on this device | the plan is the claim program's; the summary names the heir; the chain accepts the signature |
-| owner, heir | the heir makes a reading key; the owner writes a letter and saves the sealed file; the heir opens it | a reading key somebody changed on the way is refused; a letter that mentions a seed phrase is sealed only after a warning; the file holds none of the letter's words; a changed copy is refused before any wallet is asked; the letter is shown as text, never as markup; it is not offered to another wallet |
+| owner, heir | the heir makes a reading key; the owner writes a letter and saves the sealed file; the heir opens it | a reading key somebody changed on the way is refused; the letter's field asks for no spell check; a letter that mentions a seed phrase is sealed only after a warning; the file holds none of the letter's words; a changed copy is refused before any wallet is asked; the letter is shown as text, never as markup; it is not offered to another wallet |
 | signer | is given a forged request, then the real one | the forged one is refused and cannot be signed; the real one shows the heir by name and never the words "close the vault"; its signature is accepted by the chain; the words are gone from the page afterwards |
 | owner | checks in with the browser's key | the chain records it |
 | contact | pushes the deadline back | offered to the contact's wallet only, once; the owner's page then shows the extension as used |

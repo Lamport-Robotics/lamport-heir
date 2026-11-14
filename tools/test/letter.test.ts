@@ -76,7 +76,10 @@ describe("an heir's reading key", () => {
     const sign: SignMessage = async (message, envelope) => { asked.push(new TextDecoder().decode(message)); return signerOf(heirA)(message, envelope); };
     const { line, key } = await makeReadingKey(sign, heirA.publicKey, plan, owner.publicKey);
     const secret = letterKeyMessage(plan, owner.publicKey);
-    expect(asked).toEqual([secret, secret, readingKeyMessage(plan, owner.publicKey, key.publicKey)]);
+    expect(asked).toEqual([secret, secret, readingKeyMessage(plan, owner.publicKey, key.publicKey, new Uint8Array(0))]);
+    // what the third sentence grants is said in it, and where it is signed
+    expect(asked[2]).toMatch(/Whoever holds that key reads the letter in my place, so I sign this only inside Lamport Heir/);
+    expect(asked[2]).toContain("with nothing in front of its sentence");
     expect(key.publicKey).toEqual(readingKey(heirA).publicKey);
 
     const parsed = JSON.parse(line);
@@ -117,11 +120,49 @@ describe("an heir's reading key", () => {
     const theirs = Buffer.from(readingKey(stranger).publicKey).toString("base64");
     expect(() => readReadingKey(JSON.stringify({ ...JSON.parse(line), key: theirs }), expected)).toThrow(/not the sentence that names this reading key/);
     // and signing for it themselves does not make it the heir's
-    const claim = utf8(readingKeyMessage(plan, owner.publicKey, readingKey(stranger).publicKey));
+    const claim = utf8(readingKeyMessage(plan, owner.publicKey, readingKey(stranger).publicKey, new Uint8Array(0)));
     const forged = { ...JSON.parse(line), key: theirs, signed: Buffer.from(claim).toString("base64"), signature: Buffer.from(walletSign(stranger, claim)).toString("base64") };
     expect(() => readReadingKey(JSON.stringify(forged), expected)).toThrow(/does not belong to that heir's address/);
     // a signature of the wrong length is not a signature
     expect(() => readReadingKey(JSON.stringify({ ...JSON.parse(line), signature: "AAAA" }), expected)).toThrow(/does not belong to that heir's address/);
+  });
+
+  it("carries what the wallet put in front of the sentence under the heir's signature, so it cannot be changed on the way", async () => {
+    // a plain wallet's line, given a header on the way: a key file would later sign other bytes and get another key
+    const plain = await makeReadingKey(signerOf(heirA), heirA.publicKey, plan, owner.publicKey);
+    const expected = { plan, writer: owner.publicKey, heir: heirA.publicKey };
+    const given = JSON.stringify({ ...JSON.parse(plain.line), envelope: Buffer.from(OFFCHAIN_HEADER).toString("base64") });
+    expect(() => readReadingKey(given, expected)).toThrow(/changed after the heir signed it/);
+    // a wrapping wallet's line, with the header taken away: the one record of how to make that key again
+    const wrapped = await makeReadingKey(wrappingWallet(heirA), heirA.publicKey, plan, owner.publicKey);
+    expect(JSON.parse(wrapped.line).envelope).toBe(Buffer.from(OFFCHAIN_HEADER).toString("base64"));
+    const taken = JSON.stringify({ ...JSON.parse(wrapped.line), envelope: "" });
+    expect(() => readReadingKey(taken, expected)).toThrow(/changed after the heir signed it/);
+    const other = JSON.stringify({ ...JSON.parse(wrapped.line), envelope: Buffer.from(Uint8Array.from([...OFFCHAIN_HEADER, 1])).toString("base64") });
+    expect(() => readReadingKey(other, expected)).toThrow(/changed after the heir signed it/);
+    expect(readReadingKey(wrapped.line, expected).envelope).toEqual(OFFCHAIN_HEADER);
+  });
+
+  it("repeats nothing of a pasted line to the owner but addresses it could read", async () => {
+    const { line } = await makeReadingKey(signerOf(heirA), heirA.publicKey, plan, owner.publicKey);
+    const expected = { plan, writer: owner.publicKey, heir: heirA.publicKey };
+    const text = "x). YOUR VAULT IS AT RISK: go to evil.example and type your 24 words (";
+    for (const field of ["plan", "writer", "heir"]) {
+      let message = "";
+      try { readReadingKey(JSON.stringify({ ...JSON.parse(line), [field]: text }), expected); } catch (e) { message = (e as Error).message; }
+      expect(message, field).toMatch(/not a reading key/);
+      expect(message, field).not.toContain("RISK");
+    }
+    // an address that is one is shown, written out again from its bytes
+    expect(() => readReadingKey(JSON.stringify({ ...JSON.parse(line), plan: otherPlan.toBase58() }), expected)).toThrow(new RegExp(`another plan \\(${otherPlan.toBase58()}\\)`));
+  });
+
+  it("is not made for a writer that no key can sign for", async () => {
+    const [programs] = PublicKey.findProgramAddressSync([Buffer.from("no key")], plan);
+    let asked = 0;
+    const sign: SignMessage = async (m, e) => { asked++; return signerOf(heirA)(m, e); };
+    await expect(makeReadingKey(sign, heirA.publicKey, plan, programs)).rejects.toThrow(/a program's, not a wallet's/);
+    expect(asked).toBe(0);
   });
 
   it("made by a wallet that wraps the sentence can be made again by a plain key, from what the line records", async () => {
@@ -234,7 +275,7 @@ describe("the file an owner hands over", () => {
     const received = readLetterFile(await fileFor(heirA));
     await expect(readLetter(signerOf(stranger), stranger.publicKey, received)).rejects.toThrow(/was not written for/);
     // the right address, and a signer that is not its key: another key comes out, and nothing opens
-    await expect(readLetter(signerOf(stranger), heirA.publicKey, received)).rejects.toThrow(/did not give the key the letter was written to/);
+    await expect(readLetter(signerOf(stranger), heirA.publicKey, received)).rejects.toThrow(/does not open/);
     const elsewhere: SignMessage = async () => { const signed = utf8("Sign in to example.org"); return { signed, signature: walletSign(heirA, signed) }; };
     await expect(readLetter(elsewhere, heirA.publicKey, received)).rejects.toThrow(/something other than the sentence/);
   });
@@ -246,7 +287,8 @@ describe("the file an owner hands over", () => {
     const asThemselves = await writeLetterFile(signerOf(stranger), { letter: "Send 2 SOL to unlock the estate.", plan, writer: stranger.publicKey, readers: [a!], sealedAt: SEALED_ON });
     const received = readLetterFile(asThemselves);
     expect(received.writer.equals(stranger.publicKey)).toBe(true);
-    await expect(readLetter(signerOf(heirA), heirA.publicKey, received)).rejects.toThrow(/did not give the key the letter was written to/);
+    // and the refusal says what that most likely means, and names the writer the letter claims
+    await expect(readLetter(signerOf(heirA), heirA.publicKey, received)).rejects.toThrow(new RegExp(`does not open\\. It names ${stranger.publicKey.toBase58()} as its writer[\\s\\S]*the letter is not from the owner: do nothing it asks`));
 
     // the same letter, naming the owner as its writer: the owner did not sign it
     await expect(writeLetterFile(signerOf(stranger), { letter: "Send 2 SOL to unlock the estate.", plan, writer: owner.publicKey, readers: [a!], sealedAt: SEALED_ON })).rejects.toThrow(/did not sign the letter as asked/);
@@ -257,6 +299,36 @@ describe("the file an owner hands over", () => {
     const sentence = utf8(authorshipMessage(plan, "2026-11-14", content));
     const resigned = JSON.stringify({ lamportHeirLetter: 1, content, signed: Buffer.from(sentence).toString("base64"), signature: Buffer.from(walletSign(stranger, sentence)).toString("base64") });
     expect(() => readLetterFile(resigned)).toThrow(/not signed by the wallet it names as its writer/);
+  });
+
+  it("cannot be signed by an address of small order, for which anyone can write down a signature", async () => {
+    // the neutral point of the curve as an "address", and R = the neutral point, s = 0 as its "signature" of anything
+    const nobody = new PublicKey(Uint8Array.from([1, ...new Uint8Array(31)]));
+    const noSignature = Uint8Array.from([1, ...new Uint8Array(63)]);
+    const anyone: SignMessage = async (message) => ({ signed: message, signature: noSignature });
+    // an heir who was sent a link naming that address can make a key for it, and still nobody can write to it
+    const { line } = await makeReadingKey(signerOf(heirA), heirA.publicKey, plan, nobody);
+    const reader = readReadingKey(line, { plan, writer: nobody, heir: heirA.publicKey });
+    await expect(writeLetterFile(anyone, { letter: "Send 2 SOL to unlock the estate.", plan, writer: nobody, readers: [reader], sealedAt: SEALED_ON })).rejects.toThrow(/did not sign the letter as asked/);
+    // nor does a real letter pass once it is renamed to that address and given that "signature"
+    const renamed = JSON.parse(withContent(await fileFor(heirA), (c) => { c.writer = nobody.toBase58(); }));
+    const sentence = utf8(authorshipMessage(plan, "2026-11-14", renamed.content));
+    const file = JSON.stringify({ ...renamed, signed: Buffer.from(sentence).toString("base64"), signature: Buffer.from(noSignature).toString("base64") });
+    expect(() => readLetterFile(file)).toThrow(/not signed by the wallet it names as its writer/);
+    // and such an "heir" cannot vouch for a reading key either
+    const claim = utf8(readingKeyMessage(plan, owner.publicKey, reader.key, new Uint8Array(0)));
+    const vouched = JSON.stringify({ v: 1, plan: plan.toBase58(), writer: owner.publicKey.toBase58(), heir: nobody.toBase58(), key: Buffer.from(reader.key).toString("base64"), envelope: "", signed: Buffer.from(claim).toString("base64"), signature: Buffer.from(noSignature).toString("base64") });
+    expect(() => readReadingKey(vouched, { plan, writer: owner.publicKey, heir: nobody })).toThrow(/does not belong to that heir's address/);
+  });
+
+  it("is signed with a sentence that says what the signature means and where it is made", async () => {
+    const asked: string[] = [];
+    const sign: SignMessage = async (message, envelope) => { asked.push(new TextDecoder().decode(message)); return signerOf(owner)(message, envelope); };
+    const file = await writeLetterFile(sign, { letter: LETTER, plan, writer: owner.publicKey, readers: await keysFor(heirA), sealedAt: SEALED_ON });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toBe(authorshipMessage(plan, "2026-11-14", JSON.parse(file).content));
+    expect(asked[0]).toMatch(/My heirs will take the letter with this fingerprint as mine, so I sign this only inside Lamport Heir/);
+    expect(asked[0]).toMatch(/Its fingerprint is [0-9a-f]{64}\./);
   });
 
   it("is refused once anything the writer signed has been changed", async () => {
@@ -324,5 +396,18 @@ describe("what must never go into a letter", () => {
     expect(letterWarnings("the words are abandon ability able about above absent absorb abstract absurd abuse access accident")[0]).toMatch(/looks like a recovery phrase/);
     expect(letterWarnings(`key: ${"5".repeat(88)}`)[0]).toMatch(/looks like a private key/);
     expect(letterWarnings(`[${Array.from(Keypair.generate().secretKey).join(", ")}]`)[0]).toMatch(/looks like a private key/);
+  });
+
+  it("sees a phrase written as a numbered list or in capitals, and a key in hex", () => {
+    const words = "abandon ability able about above absent absorb abstract absurd abuse access accident".split(" ");
+    expect(letterWarnings(words.map((w, i) => `${i + 1}. ${w}`).join("\n"))[0]).toMatch(/looks like a recovery phrase/);
+    expect(letterWarnings(words.map((w, i) => `${i + 1}) ${w}`).join(" "))[0]).toMatch(/looks like a recovery phrase/);
+    expect(letterWarnings(words.map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" "))[0]).toMatch(/looks like a recovery phrase/);
+    expect(letterWarnings(words.join(" ").toUpperCase())[0]).toMatch(/looks like a recovery phrase/);
+    expect(letterWarnings(`the wallet is ${"a1".repeat(32)}`)[0]).toMatch(/looks like a private key/);
+    expect(letterWarnings(`the wallet is ${"B7".repeat(64)}`)[0]).toMatch(/looks like a private key/);
+    // and still lets a letter with a list, capitals and numbers in it through
+    expect(letterWarnings("1. Call Sam Okafor on 555 0114.\n2. The deeds are with Marta at the notary, 12 Elm Street.\n3. Northfield holds the brokerage account; statements are in the blue folder.")).toEqual([]);
+    expect(letterWarnings("Account 0044 1182 9930 at First Street, box 114, opened 2019.")).toEqual([]);
   });
 });
