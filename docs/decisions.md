@@ -212,7 +212,14 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   private key and where to sign it. Before a letter is sealed it is checked for anything that
   reads like a seed phrase or a key.
 - **Push needs no provider.** Web Push is sent with a key pair the service makes for itself.
-  Email needs a sending account, which is the project owner's to open.
+  Email needs a sending account, which is the project owner's to open. Email goes over SMTP, so
+  any account will do; the libraries are `nodemailer` and `web-push`, with `smtp-server` in the
+  tests ([`reminders.md`](reminders.md)).
+- **No public sign-up yet.** Subscriptions are added by whoever runs the service. A sign-up form
+  has to confirm an email address before the service writes to it, and that needs the email
+  account first.
+- **The gate's cycle is one script for every cluster** (`tools/scripts/cycle.ts`): CI runs it on
+  a local validator, and the same file is what runs on devnet ([`devnet.md`](devnet.md)).
 - **A change of plan is announced to every channel and every trusted contact**, with what changed
   and the soonest a release could now happen. With no on-chain queue (decision 2), this alarm is
   what stands in front of a forced change.

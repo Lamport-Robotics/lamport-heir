@@ -79,6 +79,12 @@ export function claimComposer(ctx: HeirCtx, set: (claim: string, terms: unknown)
     return terms;
   };
 
+  // the page builds this form anew when the owner switches between the offline signer and this device.
+  // the heirs they typed are kept for the tab's lifetime, so the switch does not empty the fields
+  const remembered = `lamport-heir-heirs:${ctx.address.toBase58()}`;
+  const remember = () => { try { sessionStorage.setItem(remembered, JSON.stringify({ first: first.value, second: second.value, delay: delay.value })); } catch { /* private mode */ } };
+  const recall = () => { try { const r = JSON.parse(sessionStorage.getItem(remembered) ?? "null"); if (r && typeof r.first === "string" && typeof r.second === "string" && typeof r.delay === "string") { first.value = r.first; second.value = r.second; delay.value = r.delay; return true; } } catch { /* nothing kept */ } return false; };
+
   const ready = (terms: Terms, address: PublicKey, made: boolean) => {
     set(address.toBase58(), termsToJson(terms));
     lock(true);
@@ -141,7 +147,7 @@ export function claimComposer(ctx: HeirCtx, set: (claim: string, terms: unknown)
   });
 
   // heirs edited after a plan was prepared are another plan: the form must not keep the old one's address
-  plan.addEventListener("input", (e) => { if (e.target === first || e.target === second || e.target === delay) { set("", undefined); out.innerHTML = ""; } });
+  plan.addEventListener("input", (e) => { if (e.target === first || e.target === second || e.target === delay) { set("", undefined); out.innerHTML = ""; remember(); } });
   const sync = () => {
     const direct = (mode as HTMLSelectElement).value === "address";
     plan.classList.toggle("hidden", direct);
@@ -154,6 +160,8 @@ export function claimComposer(ctx: HeirCtx, set: (claim: string, terms: unknown)
   // a vault that already releases to a plan: show that plan's heirs, read from the plan itself
   queueMicrotask(async () => {
     lock((mode as HTMLSelectElement).value === "plan");
+    // heirs typed earlier in this tab come back; "Prepare the plan" finds the plan if it was already created
+    if (recall() && first.value.trim()) { $("#hprep", node).click(); return; }
     if (!armed) return;
     try {
       const info = await rpc.getAccountInfo(s!.claim, "confirmed");

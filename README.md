@@ -22,6 +22,9 @@ this repository is audited.
   [`docs/release-tools.md`](docs/release-tools.md)
 - The pages: the owner's Inheritance tab, the offline signer that checks who inherits, and the
   heirs' page: [`docs/app.md`](docs/app.md)
+- The reminder service: [`docs/reminders.md`](docs/reminders.md)
+- Devnet: what is deployed (nothing yet), how to deploy, and the cycle that is milestone 4's
+  gate: [`docs/devnet.md`](docs/devnet.md)
 - The vault side lives in lamport-vault as the `succession` cargo feature, merged in
   [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5); its reference is
   [`docs/SUCCESSION.md`](https://github.com/Lamport-Robotics/lamport-vault/blob/main/docs/SUCCESSION.md)
