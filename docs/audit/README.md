@@ -107,12 +107,37 @@ removes or weakens that rule and requires a test to notice (`tests/mutants/` in 
 | S7 | The Heir signer holds no code that talks to a network | `app/build.mjs` fails the build otherwise; the page's CSP is `connect-src 'none'` |
 | S8 | The page creates a plan only after every heir named by address has signed for it | `app/test/acceptance.test.ts`; the claim program checks the same signatures again (C7) |
 | S9 | The page refuses a claim address that nothing exists at and no key signs for, a program, a token account, and a vault whose plan names this one; it says so when an address is a program's and holds only SOL | `claimProblemOnChain`, `claimNoteOnChain` in lamport-vault `web/src/heir-page.ts`; the browser test covers the first case (the plan's address before the plan exists), the rest are read, **not tested** |
-| S10 | The heirs' page asks for no key and no seed phrase | by reading: `app/claim.html` and `app/src/claim-page.ts` have one text field, for an address |
+| S10 | The heirs' page asks for no key and no seed phrase | by reading: the fields of `app/src/claim-page.ts` and `app/src/letter-view.ts` take an address, a private heir's salt (not a key: it moves nothing, and is kept only while the page is open), and a letter's file or text |
 | S11 | The three pages work together, built as they are shipped, from an empty wallet to an heir holding the vault's SOL | `app/e2e/pages.e2e.ts`, a headless browser on a local validator; it also fails on any uncaught error in a page |
 
 The terms in a request (S5) are not part of what is signed: the signature covers the claim
 address, which is all the vault program knows. The terms are how the signer explains that
 address, and it accepts them only when they hash to it.
+
+### The family letter
+
+A letter moves no funds and no on-chain state. What can go wrong with it is that the wrong
+person reads it, or that an heir is shown somebody else's words as the owner's. The code is
+`tools/src/letter.ts` (about 460 lines, half of them comments), with `app/src/letter-panel.ts` and
+`app/src/letter-view.ts` in front of it ([`../app.md`](../app.md), "The family letter"). The
+tests named here are in `tools/test/letter.test.ts` unless another file is given.
+
+| # | property | held by |
+|---|---|---|
+| L1 | Only the heirs a letter was sealed for can read it | X25519 to each heir's reading key, HKDF-SHA-256, AES-256-GCM; `is readable by each heir it was written for, and by nobody else`; `does not open once anything in it has been changed`; a reading key of small order is refused (`needs words, someone to read it, and reading keys that are keys`) |
+| L2 | A letter shown as written by a wallet was signed by that wallet, whole | the file keeps its content as the exact text the writer's wallet signed for, and `readLetterFile` checks that signature before anything else in the file is used; `is refused once anything the writer signed has been changed`; signatures are checked strictly (`cannot be signed by an address of small order, for which anyone can write down a signature`) |
+| L3 | Someone who knows an heir's public reading key cannot get a letter of their own opened | the sentence a reading key is made from names the writer, and so does the key derivation; `cannot be forged by someone who knows an heir's reading key`; each of the two bindings was removed in turn and a test failed |
+| L4 | The owner encrypts to the heir's own key, and nothing in the heir's line can be changed on the way | the heir's address signs a sentence that names the reading key and what the wallet put in front of the key's sentence; `is refused by the owner's side unless it is for this plan, this writer and this heir, whole, and signed by the heir`; `carries what the wallet put in front of the sentence under the heir's signature` |
+| L5 | A reading key can be made again on the day it is needed | the signer is asked twice and a different answer is refused (`is not made by a wallet that signs differently each time`); a key file can make the key a wrapping wallet made (`made by a wallet that wraps the sentence can be made again by a plain key`); limit 18 |
+| L6 | Nothing in these flows signs a transaction | a sentence is signed bare or behind the header of an off-chain message, which starts with a byte no transaction starts with; the key file's signer refuses anything else in front (`is nothing or the header of an off-chain message, and never anything a transaction could start with`) |
+| L7 | The signature that is an heir's reading key leaves their device in nothing | `is made with three signatures, and the line that goes to the owner holds no secret`; by reading, `letter-view.ts` stores nothing |
+| L8 | A letter's words reach the page as text, and the terminal without control characters | the browser test puts markup in a letter and finds none on the page; `tools/test/cli.test.ts`: `keeps a letter's control characters off the terminal` |
+| L9 | The letter's text is not handed to anything before it is sealed, as far as the page can ask | the field asks for no spell check, no saved form data and no writing aid, which the browser test reads back; limit 19 |
+| L10 | A letter that reads like a seed phrase or a key is not sealed without the owner being told | `warns about a seed phrase, a run of words that looks like one, and a key`; `sees a phrase written as a numbered list or in capitals, and a key in hex`; the browser test seals such a letter only on the second press; limit 19 |
+| L11 | The owner's page repeats nothing a stranger wrote but an address | `repeats nothing of a pasted line to the owner but addresses it could read` |
+
+L2 and L3 together are what "this is the owner's letter" rests on, and they rest in turn on two
+things no code enforces (limit 16).
 
 ### Off chain
 
@@ -158,8 +183,10 @@ Stated plainly, so that nobody finds them by surprise.
    wallet to an heir holding the vault's SOL ([`../app.md`](../app.md)), with the key the pages
    offer on localhost. No Wallet Standard wallet and no hardware wallet has been driven, by a
    machine or by hand.
-10. **The page names heirs by address only.** Heirs kept private (a salted hash) go through the
-    command-line tools.
+10. **The owner's page names heirs by address only.** A plan with an heir kept private (a salted
+    hash) is made with the command-line tools. Such an heir collects on the heirs' page with the
+    salt from their kit; that field is tested as words and through the claim code on a validator,
+    not by the browser test.
 11. **Nobody can sign up for reminders from the page.** Whoever runs the service adds vaults by
     hand; email has no sending account yet ([`../reminders.md`](../reminders.md)).
 12. **Whoever controls the page an owner uses can lie on that page.** The offline signer is the
@@ -167,13 +194,33 @@ Stated plainly, so that nobody finds them by surprise.
     the two keys. It cannot cover what the page says afterwards about the state of the chain.
 13. **The signer cannot say who a private heir is.** For an heir kept as a salted hash it shows
     the whole fingerprint and says it cannot tell whose address is behind it. The owner's only
-    reference is the kit they printed.
+    reference is the kit they printed, which prints that fingerprint.
 14. **An heir's claim has no limit on new token accounts.** Anyone can make a released vault's
     address hold worthless tokens; each one the heir sweeps and claims is a wallet prompt and
     about 0.002 SOL of rent, which comes back when the account is closed. The heir can decline
     any of them. (The finisher, which pays for strangers, does have a limit.)
 15. **A copy of a browser profile carries the check-in key with it**, and any script on the
     page's origin can ask it to sign. What it signs can only delay a release (limit 8).
+16. **"This is the owner's letter" rests on two things no code enforces.** The owner's wallet
+    must sign the authorship sentence nowhere but in Lamport Heir: a site that got that one
+    signature, for a letter of its own making, would hold a letter that opens. And an heir must
+    make a reading key only for the owner: nothing on chain names the owner's wallet (a vault is
+    owned by its words; a wallet pays its fees), so the heirs' page cannot check the wallet in
+    the link, and an heir talked into making a key for a stranger has given that stranger a way
+    to write to them. Both sentences say what signing them grants and where they are signed.
+17. **A letter is a file, and nothing delivers it.** An heir who has the file can read it at
+    once, not only after a release. No service stores it or hands it over at the release, and
+    the owner cannot open a sealed letter again. A newer letter does not undo an older one.
+18. **A reading key lives in how a wallet signs.** A wallet that later signs the same sentence
+    differently no longer makes the key, and the letter has to be sealed again, which needs the
+    owner. What the wallet put in front of the sentence is recorded, which lets a key file make
+    the same key; that helps nobody whose key never leaves a hardware wallet.
+19. **The page cannot protect a letter from other software, and its check for secrets is a
+    guess.** An extension that reads pages, or a keyboard that sends what is typed, sees the
+    letter before it is sealed. The warning about a seed phrase or a key goes by how text looks
+    and can miss one written another way.
+20. **One sealed file could be made to read differently to two heirs**, by its writer and by
+    nobody else: AES-GCM does not commit to its key. The writer could as well send two letters.
 
 ## Where the spec was not followed
 
@@ -228,10 +275,43 @@ build constant, a type-only cast, or folds to the old value.
 signer is built from. A fix is written and is with the project owner; it is not described here
 until it is published.
 
-**Not covered by that review:** `tools/src/cli.ts`, `finisher.ts`, `letter.ts`, `plan/`, the
+**Not covered by that review:** `tools/src/cli.ts`, `finisher.ts`, `letter.ts` (reviewed since: the next section), `plan/`, the
 reminder schedule and service beyond the send loop, the programs beyond the terms and the proof
 of control, real wallets, and byte identity of the vault's own build (checked separately, by
 building).
+
+## Review of the family letter
+
+A fourth reviewer, who had not seen it, read the letter code, both pages and the command-line
+commands before any of it was pushed, with test files of their own against `tools/src/letter.ts`.
+The brief was to forge a letter, read one, turn the owner's encryption to another key, make a
+wallet or a key file sign something harmful, leak the secret signature, and get markup onto a
+page.
+
+**Not found:** any of those, for an attacker who knows an heir's line, the plan and the owner's
+wallet and can hand an heir any file. Renaming, re-signing, moving signatures between letters,
+duplicate keys in the signed content, every X25519 point of small order as a reading key, and a
+wrapped key moved to another recipient were all refused.
+
+**Found, and fixed before the first push** (commit "letter: what an independent review found"):
+
+- The letter's field asked for spell check, which in some browsers sends the text to the
+  browser's maker. No attacker needed. It now asks for none (L9).
+- What a wallet put in front of the key's sentence was outside the heir's signature. Changed on
+  the way, it left a letter sealed to the right key and unreadable with a key file, silently. It
+  is now in the signed sentence (L4).
+- The two public sentences did not say what signing them grants (limit 16).
+- Signatures were checked by the lenient rule: an address of small order signed anything (L2).
+- The owner's error box repeated a pasted line's own text (L11).
+- A stranger's letter was refused in words that blamed the heir's wallet; the refusal now says
+  that such a letter is not the owner's.
+- A kit accepted and printed a salt for an heir named by address.
+- The seed-phrase check missed a numbered or capitalised list and a key in hex (L10).
+- A typed salt outlived Disconnect.
+
+**Not covered by that review:** the pages in a real browser with a real wallet (limit 9), and
+how wallets other than the test key sign messages: whether each wraps a sentence, and whether it
+does so the same way from one version to the next (limit 18).
 
 ## Running everything
 
@@ -239,9 +319,9 @@ building).
 cargo test --workspace                                   # 23
 (cd tests/svm && cargo test)                             # 49, both programs in LiteSVM
 python3 tests/mutants/run.py                             # 23 mutants, after a green baseline
-(cd tools && npm test)                                   # 143
+(cd tools && npm test)                                   # 161
 (cd tools && npm run build:programs && npm run e2e)      # a local validator: four releases, the whole cycle, the Pincer1 link
-(cd app && npm test && npm run build)                    # 31; then app/dist/heir/, with the signer's checks
+(cd app && npm test && npm run build)                    # 34; then app/dist/heir/, with the signer's checks
 (cd app && npm run e2e)                                  # the pages in a headless browser, on the same validator
 ```
 
