@@ -183,7 +183,22 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   the vault page and its signer have to know that program's id and how to show a `SetSuccession`
   before an owner can use such a vault at all. That is done as a second build of the same source,
   the way the program itself is a second build: the existing page and `signer.html` come out
-  byte for byte as they are today, and the Heir build is a separate file with its own hash.
+  byte for byte as they are today, and the Heir build is a separate file with its own hash
+  (lamport-vault#7; [`app.md`](app.md)). The project owner said to go ahead with it on 2026-11-13.
+- **The offline signer checks who inherits, not only where the vault releases to.** The spec has
+  the owner sign a `SetSuccession` that names a claim address. A plan's address is a hash of its
+  heirs, so the request carries the heirs and the signer derives the address again; a request
+  whose heirs do not give its address is refused. Without this the one screen the owner can trust
+  would show them 32 bytes.
+- **Heirs accept by signing a sentence, sent back as a line of text.** The spec lists "heir
+  proofs" and leaves the route open. No server sits between owner and heir: the owner sends a
+  link, the heir's page signs, the heir sends one line back by any means, and the owner's page and
+  then the claim program check it.
+- **Private heirs stay with the command-line tools for now.** A hashed heir's salt exists only on
+  their kit. A page that makes salts has to make sure the kit is printed before the plan is armed,
+  and that flow is not built.
+- **The tools sign with a wallet as well as with a key file**, so the heirs' page runs the same
+  `start` and `claim` as the command-line tool rather than a second implementation.
 - **The check-in key pays its own fee.** The spec lets Lamport pay the fee of a check-in. A fee
   relay is a funded key on a server and one more thing that has to stay up. A check-in costs
   0.000005 SOL, so the owner sends the check-in key's address a few cents of SOL when they arm,
@@ -211,7 +226,10 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
 
 ## Still the project owner's
 
-- Devnet keypairs and devnet deployment (milestone 4).
+- Test SOL for the devnet deployment. The keys exist (2026-11-13, with the owner's word) and the
+  ids are in the source, but devnet's command-line faucet is closed and its web faucet does not
+  serve automated clients: about 10 SOL has to be requested by a person.
 - Anything on mainnet, and any real funds.
 - Counsel on estates, money transmission and wording, before anyone outside is told to rely on this.
-- Merging. The builder opens draft pull requests and does not merge them.
+- Merging, except where the owner has said otherwise: on 2026-11-13 he told the builder to review
+  and merge Heir's own pull requests once their checks pass.
