@@ -20,6 +20,11 @@ this repository is audited.
 - The claim program: [`docs/claim-program.md`](docs/claim-program.md)
 - Finishing a release and claiming it, the finisher, the claim tool and the claim kit:
   [`docs/release-tools.md`](docs/release-tools.md)
+- The pages: the owner's Inheritance tab, the offline signer that checks who inherits, and the
+  heirs' page: [`docs/app.md`](docs/app.md)
+- The reminder service: [`docs/reminders.md`](docs/reminders.md)
+- Devnet: what is deployed (nothing yet), how to deploy, and the cycle that is milestone 4's
+  gate: [`docs/devnet.md`](docs/devnet.md)
 - The Pincer1 link: [`docs/pincer-link.md`](docs/pincer-link.md)
 - The vault side lives in lamport-vault as the `succession` cargo feature, merged in
   [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5); its reference is
@@ -29,6 +34,7 @@ this repository is audited.
 ```
 programs/heir-claim   the claim program: holds what a vault releases, for the heirs named
 tools/                the finisher, the claim tool and the claim kit (TypeScript)
+app/                  what is served under /heir/: the page, the cold signer, the heirs' page
 tests/svm             the built programs in LiteSVM, with a clock the tests can move
 kat/                  byte layouts shared by the program and the tools
 vendor/lamport-vault  lamport-vault, pinned to one commit (a git submodule)
@@ -50,6 +56,15 @@ node tools/scripts/build-programs.mjs                               # both progr
 
 The tools have their own set-up and tests, an end-to-end run on a local validator among them:
 [`tools/README.md`](tools/README.md).
+
+The pages are built from the vault's own page and signer (the pinned submodule) plus `app/`:
+
+```sh
+(cd vendor/lamport-vault/sdk && npm ci --ignore-scripts && npm run build)
+(cd vendor/lamport-vault/web && npm ci --ignore-scripts)
+(cd tools && npm ci --ignore-scripts) && cd app && npm ci --ignore-scripts
+npm test && npm run build                                           # app/dist/heir/
+```
 
 ## Milestones
 
