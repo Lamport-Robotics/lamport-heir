@@ -37,6 +37,8 @@ node src/cli.ts finish <vault or plan> --keypair FILE        # release a vault t
 node src/cli.ts claim  <vault or plan> --keypair FILE [--salt SALT]
 node src/cli.ts kit    <vault> --heir ADDRESS [--salt SALT] [--label NAME] --out kit.html
 node src/cli.ts finisher --keypair FILE [--interval 60] [--once]
+node src/cli.ts letter-key  <plan> --writer ADDRESS --keypair FILE   # your key for reading the owner's letter: one line to send them
+node src/cli.ts letter-open <file> --keypair FILE                    # read a family letter written for you
 ```
 
 `--rpc URL` picks the endpoint (default: `$LAMPORT_HEIR_RPC`, else devnet). `--dry-run` asks the

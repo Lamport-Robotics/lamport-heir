@@ -97,6 +97,9 @@ describe("the page", () => {
     expect(html).toContain("abc1234");
     expect(html).not.toContain("Your salt");
     expect(html).not.toContain("Test kit");
+    // a named heir may be left a letter: how to read it, and what one never asks for
+    expect(html).toContain("node src/cli.ts letter-open THE-LETTER-FILE --keypair YOUR-KEY-FILE");
+    expect(html).toContain("never asks you for money, a key or a seed phrase");
   });
 
   it("tells a contingent heir how long they wait", () => {
@@ -112,6 +115,7 @@ describe("the page", () => {
     expect(html).toContain(`--salt ${text}`);
     expect(html).toContain("not published");
     expect(html.match(/<svg /g)!.length).toBe(3); // vault, plan, salt
+    expect(html).not.toContain("letter-open"); // nobody can write to an heir whose address is not known
   });
 
   it("for a vault that releases straight to the heir, there is no plan to show", () => {
@@ -121,6 +125,7 @@ describe("the page", () => {
     expect(html).not.toContain("Plan address");
     expect(html).not.toContain("Claim program");
     expect(html.match(/<svg /g)!.length).toBe(1);
+    expect(html).not.toContain("letter-open"); // a letter is written under a plan
   });
 
   it("marks a test build as one", () => {

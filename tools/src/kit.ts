@@ -222,6 +222,15 @@ cd tools &amp;&amp; npm ci</pre></li>
 <pre>${esc(claimCommand)}</pre></li>
 </ol>
 
+${
+  input.terms && !hashedHeir
+    ? `<h2>If the owner left you a letter</h2>
+<p>The owner may have written a letter for their heirs: where other accounts are, who to call, where the papers are. It is a file whose name begins <code>lamport-heir-letter</code>. Only the heirs can read it, and nobody but the owner can have made it. Read it with the same key file:</p>
+<pre>${esc(`${tool} letter-open THE-LETTER-FILE --keypair YOUR-KEY-FILE`)}</pre>
+<p>A family letter never asks you for money, a key or a seed phrase. If one does, it is not what it seems.</p>
+`
+    : ""
+}
 <h2>If Lamport is gone</h2>
 <p>Nothing above depends on Lamport. The vault and the plan are programs on the Solana network. The tools talk to any Solana RPC endpoint: replace the one after <code>--rpc</code> with any other. The addresses on this page are all the tools need to find the vault.</p>
 
