@@ -189,6 +189,63 @@ jobs:
           path: tools/dist/lamport-heir.mjs
           if-no-files-found: error
 
+  app:
+    name: app (the page, the cold signer and the heirs' page)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            tools/package-lock.json
+            vendor/lamport-vault/sdk/package-lock.json
+            vendor/lamport-vault/web/package-lock.json
+
+      # The page and the signer are the vault's own source, from the pinned submodule, built with
+      # the vault's own configuration; this repository adds one module to each (docs/app.md).
+      - name: Build the vault SDK (from the pinned submodule)
+        working-directory: vendor/lamport-vault/sdk
+        run: npm ci --ignore-scripts && npm run build
+
+      - name: Install the vault page's dependencies (from the pinned submodule)
+        working-directory: vendor/lamport-vault/web
+        run: npm ci --ignore-scripts
+
+      - name: Install
+        run: |
+          (cd tools && npm ci --ignore-scripts)
+          (cd app && npm ci --ignore-scripts)
+
+      - name: Types and unit tests
+        working-directory: app
+        run: npm run typecheck && npm test
+
+      # build.mjs fails if page code reached the signer's bundle, or if the signer cannot check a plan
+      - name: Build what is served under /heir/
+        working-directory: app
+        run: |
+          npm run build | tee build.log
+          {
+            echo "### /heir/"
+            echo
+            echo '```'
+            grep -A4 '^dist/heir/' build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: heir-site-${{ github.sha }}
+          path: app/dist/heir
+          if-no-files-found: error
+
   e2e:
     # A release from end to end on a local validator: tools/e2e/release.e2e.ts says what it covers.
     name: release, end to end, on a local validator
