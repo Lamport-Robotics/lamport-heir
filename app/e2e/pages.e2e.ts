@@ -222,8 +222,9 @@ describe("the pages, in a browser, on a local validator", () => {
     for (const word of ["notary", "Elm Street", "safe at home", "Sam"]) expect(sealedFile).not.toContain(word);
 
     await heir.click("#navletter");
+    // the view the heir is leaving has a "Check the letter" button too: what tells the two apart is the key panel going
+    await heir.waitForSelector("#lkpanel", { state: "detached" });
     await heir.waitForSelector("#lcheck");
-    expect(await heir.locator("#lkpanel").count()).toBe(0);
     const changed = JSON.parse(sealedFile); const inside = JSON.parse(changed.content); inside.sealedAt = "2031-01-01"; changed.content = JSON.stringify(inside);
     await heir.fill("#lpaste", JSON.stringify(changed));
     await heir.click("#lcheck");
