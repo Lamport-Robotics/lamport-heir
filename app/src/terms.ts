@@ -97,7 +97,8 @@ function durationInDays(secs: bigint, daySecs: bigint): string {
 
 function sayHeir(h: HeirRef): string {
   if (h.kind === "address") return h.address.toBase58();
-  if (h.kind === "hashed") return `private: the plan holds only a fingerprint of their address (${hex(h.commitment).slice(0, 16)}…). They claim with their own key and the salt printed in their kit`;
+  // the whole fingerprint: a part of it could be matched by someone choosing their own address and salt
+  if (h.kind === "hashed") return `NOT SHOWN. The plan holds only this fingerprint of an address and a salt: ${hex(h.commitment)}. This signer cannot tell whose address it is. Compare all 64 characters with the fingerprint printed on that heir's kit`;
   return "none";
 }
 
@@ -126,8 +127,13 @@ export function explainClaim(a: { claim: string; terms?: unknown }, vault: strin
   if (terms.vault.toBase58() !== vault) return { problem: `the plan in this request was made for another vault (${terms.vault.toBase58()}). What this vault released to it could never be claimed`, rows: [] };
   const derived = planAddress(terms, programs.claim).toBase58();
   if (derived !== a.claim) return { problem: `the heirs named in this request give the plan address ${derived}, but the request releases to ${a.claim}`, rows: [] };
+  // with a private heir the derivation still proves the address is a plan for this vault with these terms, and
+  // nothing about who is behind a fingerprint: whoever made the request may have made the fingerprint too
+  const hidden = terms.primary.kind === "hashed" || terms.contingent.kind === "hashed";
   const rows: [string, string][] = [
-    ["who that is", "a Lamport Heir plan. Its address was derived here, from this vault and the heirs below, and it is the address above. The heirs cannot be changed without changing the address"],
+    ["who that is", hidden
+      ? "a Lamport Heir plan for this vault that keeps an heir private. Its address was derived here from the terms below and matches, but this signer cannot tell you who a private heir is. Do not sign unless each fingerprint below is, character for character, the one on the kit you printed for that heir"
+      : "a Lamport Heir plan. Its address was derived here, from this vault and the heirs below, and it is the address above. The heirs cannot be changed without changing the address"],
     ["first heir", `${sayHeir(terms.primary)} · may claim as soon as the vault has been released`],
     ["second heir", terms.contingent.kind === "none" ? "none: only the first heir can ever claim" : `${sayHeir(terms.contingent)} · may claim if the first heir has not, from ${durationInDays(terms.contingentDelaySecs, programs.daySecs)} after the release`],
   ];

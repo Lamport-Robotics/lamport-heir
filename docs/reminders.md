@@ -35,13 +35,17 @@ owner acts from their own bookmark.
 
 | channel | needs | state |
 |---|---|---|
-| email (`email.ts`) | any SMTP sending account | built and tested against a mail server on the test machine. **No account exists yet**: that is the project owner's to open |
+| email (`email.ts`) | any SMTP sending account, over TLS (`smtps://`, or `smtp://` that must upgrade before anything is sent) | built and tested against a mail server on the test machine. **No account exists yet**: that is the project owner's to open |
 | browser notifications (`push.ts`) | nothing but the service's own key pair, which it makes | built and tested up to the push service. The page that subscribes a browser is not built |
 
 A subscription for browser notifications names the address the service is to post to, and it
 comes from a web form. The service posts only to the push services of browser makers (Google,
 Mozilla, Apple, Microsoft), over HTTPS, and to nothing else: without that list it could be made
-to post to an address only it can reach.
+to post to an address only it can reach. The host has to be written plainly (no escapes, no
+credentials, no port), and what is posted to is the address as the check understood it.
+
+A vault's label, the owner's own name for it, is printed in every message. It is held to a short
+name, so it cannot carry an address to open or a paragraph of somebody's own.
 
 ## What it keeps
 

@@ -22,6 +22,11 @@ describe("reminders as browser notifications", () => {
       "https://127.0.0.1/hook", "https://localhost/hook", "https://169.254.169.254/latest/meta-data", // this machine and its neighbours
       "https://fcm.googleapis.com:8443/fcm/send/abc", // another port
       "https://user@fcm.googleapis.com/fcm/send/abc",
+      "https://user:pass@fcm.googleapis.com/fcm/send/abc",
+      "https://%6c%6f.push.apple.com/x", // an escaped host: one parser reads a push host, another reads none and posts to this machine
+      "https://fcm.googleapis.com%2f.example.net/x",
+      "https://fcm.googleapis.com./fcm/send/abc", // a trailing dot
+      "https://FCM.googleapis.com\\@example.net/x",
       "https://push.apple.com/abc", // the bare domain is not a push host
       "ftp://fcm.googleapis.com/abc", "not a url", "",
     ]) expect(() => parsePushSubscription(sub(endpoint)), endpoint).toThrow(/endpoint/);

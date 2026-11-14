@@ -66,6 +66,10 @@ describe("the reminder service's command line", () => {
     await expect(run(["add", vault.toBase58()], env)).rejects.toThrow(/somewhere to reach the owner/);
     await expect(run(["add", vault.toBase58(), "--email", "a@example.org\nBcc: b@example.org"], env)).rejects.toThrow(/not an email address/);
     await expect(run(["add", vault.toBase58(), "--email", "a@example.org", "--contact", "nobody"], env)).rejects.toThrow(/not an email address/);
+    // the label is printed in every message: it may not carry an address to open, or a message of its own
+    for (const label of ["see https://example.net/claim", "example.net/claim", "savings\nYour vault is locked. Call 555", "x".repeat(41), "", " savings"]) {
+      await expect(run(["add", vault.toBase58(), "--email", "a@example.org", "--label", label], env), JSON.stringify(label)).rejects.toThrow(/short name/);
+    }
     await expect(run(["list"], { ...env, LAMPORT_HEIR_STORE_KEY: "abc" })).rejects.toThrow(/64 hex digits/);
     await expect(run(["list"], {})).rejects.toThrow(/LAMPORT_HEIR_STORE is not set/);
     await expect(run(["send-everything"], env)).rejects.toThrow(/unknown command/);

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { PlanAccount, Terms } from "../../tools/src/claim.ts";
 import { PROGRAMS } from "../../tools/src/programs.ts";
 import type { Situation } from "../../tools/src/release.ts";
-import { placeInTerms, situationWords, stepWords, verdictWords, when } from "../src/heir-words.ts";
+import { contactWords, placeInTerms, situationWords, stepWords, verdictWords, when } from "../src/heir-words.ts";
 
 const DAY = 86_400n, T0 = 1_800_000_000n;
 const vault = Keypair.generate().publicKey, first = Keypair.generate().publicKey, second = Keypair.generate().publicKey, stranger = Keypair.generate().publicKey;
@@ -74,6 +74,28 @@ describe("where a vault stands, in words", () => {
     const { plan: _plan, ...direct } = open(s, T0 + 430n * DAY);
     expect(situationWords(direct as Situation, first).lines.join(" ")).toMatch(/straight to your wallet/);
     expect(situationWords(direct as Situation, stranger).lines.join(" ")).toMatch(/not named/);
+  });
+});
+
+describe("the trusted contact", () => {
+  const contact = Keypair.generate().publicKey;
+  it("is offered their one extension, and told what it does and does not do", () => {
+    const c = contactWords(open(state({ contactKey: contact }), T0 + 10n * DAY), contact, 90n)!;
+    expect(c.canExtend).toBe(true);
+    expect(c.text).toMatch(/push their deadline back by 90 days/);
+    expect(c.text).toMatch(/moves nothing, it gives you nothing/);
+    // also while a waiting period is open: that is when it matters
+    expect(contactWords(open(state({ contactKey: contact, waitOpen: true, waitStartedTs: T0 + 366n * DAY }), T0 + 370n * DAY), contact, 90n)!.canExtend).toBe(true);
+  });
+
+  it("is told when the extension is spent, and nobody else is offered anything", () => {
+    const used = contactWords(open(state({ contactKey: contact, contactUsed: true }), T0 + 10n * DAY), contact, 90n)!;
+    expect(used.canExtend).toBe(false);
+    expect(used.text).toMatch(/used your extension/);
+    expect(contactWords(open(state({ contactKey: contact }), T0), first, 90n)).toBeNull();
+    expect(contactWords(open(state({ contactKey: contact }), T0), undefined, 90n)).toBeNull();
+    expect(contactWords(open(state(), T0), PublicKey.default, 90n)).toBeNull(); // no contact named: the default address is nobody
+    expect(contactWords(released(T0 + 500n * DAY), contact, 90n)).toBeNull();
   });
 });
 

@@ -9,7 +9,10 @@ import { type Message } from "./messages.ts";
 import { type Channel } from "./service.ts";
 
 export interface EmailConfig {
-  /** an SMTP URL with its credentials, e.g. `smtps://user:password@smtp.example.com:465`. Never logged. */
+  /**
+   * An SMTP URL with its credentials, e.g. `smtps://user:password@smtp.example.com:465`. Never logged.
+   * `smtp://` (port 587) must upgrade to TLS before anything is sent, except to this machine itself.
+   */
   smtpUrl: string;
   /** the sender, e.g. `Lamport Heir <heir@example.com>` */
   from: string;
@@ -33,7 +36,17 @@ export function emailConfigProblem(c: Partial<EmailConfig>): string | undefined 
 export function emailChannel(config: EmailConfig): Channel & { close(): void } {
   const problem = emailConfigProblem(config);
   if (problem) throw new Error(`email is not configured: ${problem}`);
-  const transport = nodemailer.createTransport(config.smtpUrl);
+  const url = new URL(config.smtpUrl);
+  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+  const transport = nodemailer.createTransport({
+    host: url.hostname.replace(/^\[|\]$/g, ""),
+    port: Number(url.port) || (url.protocol === "smtps:" ? 465 : 587),
+    secure: url.protocol === "smtps:",
+    // smtp:// starts in the clear and upgrades. Without this a server that does not offer the upgrade, or
+    // somebody on the way who removes the offer, would be sent the account's password as plain text.
+    requireTLS: url.protocol === "smtp:" && !local,
+    ...(url.username ? { auth: { user: decodeURIComponent(url.username), pass: decodeURIComponent(url.password) } } : {}),
+  });
   return {
     async send(to: string, message: Message): Promise<void> {
       if (!isEmailAddress(to)) throw new Error("the recipient is not an email address");
