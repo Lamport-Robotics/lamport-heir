@@ -27,6 +27,15 @@ export interface Recipient {
   to: string;
 }
 
+/**
+ * What a vault's label may be: a short name in letters, digits, spaces and a little punctuation.
+ * It is printed in every message about the vault, to the owner and to their contacts, so it must
+ * not be able to carry an address to open or a paragraph of somebody's own.
+ */
+export function isLabel(label: string): boolean {
+  return /^[\p{L}\p{N}][\p{L}\p{N} '_-]{0,39}$/u.test(label);
+}
+
 /** One vault somebody asked to be reminded about. */
 export interface Subscription {
   vault: string;

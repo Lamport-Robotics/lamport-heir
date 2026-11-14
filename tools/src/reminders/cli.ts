@@ -32,7 +32,7 @@ import { type Chain, COMMITMENT } from "../chain.ts";
 import { emailChannel, emailConfigProblem, isEmailAddress } from "./email.ts";
 import { FileStore, storeKey } from "./file-store.ts";
 import { generatePushKeys, parsePushSubscription, pushChannel } from "./push.ts";
-import { type Channel, type ChannelKind, type Recipient, ReminderService, type TickReport } from "./service.ts";
+import { type Channel, type ChannelKind, isLabel, type Recipient, ReminderService, type TickReport } from "./service.ts";
 
 class UsageError extends Error {}
 
@@ -132,6 +132,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
       }
       if (owner.length === 0) throw new UsageError("add needs somewhere to reach the owner: --email or --push-file");
       const label = one("label");
+      if (label !== undefined && !isLabel(label)) throw new UsageError("--label takes a short name: up to 40 letters, digits, spaces, hyphens, underscores or apostrophes");
       openStore(io.env).subscribe({ vault, ...(label ? { label } : {}), owner, contacts: contacts.map((to) => ({ channel: "email", to })) });
       io.out(`reminding about ${vault}: the owner on ${owner.length} channel(s), ${contacts.length} trusted contact(s)`);
       return 0;

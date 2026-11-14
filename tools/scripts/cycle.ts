@@ -45,7 +45,8 @@ export interface CycleOptions {
 }
 
 export interface CycleReport {
-  rpcUrl: string;
+  /** the host of the endpoint the run talked to (its full address may hold a provider's key) */
+  endpoint: string;
   genesisHash: string;
   programs: { vault: string; claim: string };
   vault: string;
@@ -81,17 +82,19 @@ export async function runCycle(opts: CycleOptions): Promise<CycleReport> {
   const log = opts.log ?? (() => {});
   const { payer } = opts;
   const chain = new Connection(opts.rpcUrl, "confirmed");
+  // an endpoint's address may carry a provider's key, in its path or its query: only its host goes into reports and errors
+  const endpoint = (() => { try { return new URL(opts.rpcUrl).host; } catch { return "the endpoint given"; } })();
 
   for (const [name, id] of [["vault", programs.vault], ["claim", programs.claim]] as const) {
     const info = await chain.getAccountInfo(id, "confirmed");
-    if (!info?.executable) throw new Error(`the ${name} program ${id.toBase58()} is not deployed on ${opts.rpcUrl}`);
+    if (!info?.executable) throw new Error(`the ${name} program ${id.toBase58()} is not deployed on ${endpoint}`);
   }
   if (programs.daySecs !== 1n) throw new Error("this run needs the short-clocks test programs: with real durations it would take four months");
   const before = await chain.getBalance(payer.publicKey, "confirmed");
   if (before < 300_000_000) throw new Error(`the paying key ${payer.publicKey.toBase58()} holds ${before / 1e9} SOL; the run needs 0.3 to be safe`);
 
   const report: CycleReport = {
-    rpcUrl: opts.rpcUrl, genesisHash: await chain.getGenesisHash(), programs: { vault: programs.vault.toBase58(), claim: programs.claim.toBase58() },
+    endpoint, genesisHash: await chain.getGenesisHash(), programs: { vault: programs.vault.toBase58(), claim: programs.claim.toBase58() },
     vault: "", plan: "", firstHeir: "", secondHeir: "", mint: "", steps: [], reminders: [],
     delivered: { lamportsInVault: String(SOL_IN_VAULT), lamportsClaimed: "0", tokensInVault: TOKENS_IN_VAULT.toString(), tokensClaimed: "0" },
   };

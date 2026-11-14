@@ -99,6 +99,21 @@ export function situationWords(s: Situation, me?: PublicKey): Words {
   return { headline: "This vault has been released.", lines, ...(warning ? { warning } : {}), next: warning || mine === "not_named" ? "nothing" : "collect" };
 }
 
+/**
+ * For the owner's trusted contact: the one thing their key can do. Null when `me` is not the
+ * contact of an open, armed vault.
+ */
+export function contactWords(s: Situation, me: PublicKey | undefined, extensionDays: bigint): { text: string; canExtend: boolean } | null {
+  const plan = s.succession;
+  // the default address in the plan means "no contact": it is nobody's, whoever is asking
+  if (!me || s.state !== "open" || !plan || !s.status || s.status.phase === "unarmed" || plan.contactKey.toBase58() === "11111111111111111111111111111111" || !plan.contactKey.equals(me)) return null;
+  if (plan.contactUsed) return { canExtend: false, text: "You are this vault's trusted contact, and you have used your extension. Only the owner can give you another, by signing their plan again." };
+  return {
+    canExtend: true,
+    text: `You are this vault's trusted contact. If you believe the owner is alive but cannot sign or check in, you can push their deadline back by ${extensionDays} days. You can do it once. It moves nothing, it gives you nothing, and it cancels a waiting period that is open.`,
+  };
+}
+
 /** what came of a claim, in a sentence */
 export function verdictWords(v: ClaimVerdict, now: bigint, daySecs = 86_400n): string {
   switch (v.kind) {

@@ -67,11 +67,24 @@ describe("who is behind a claim address", () => {
     expect(alone.get("second heir")).toMatch(/^none/);
   });
 
-  it("says a private heir is private, and shows no address for them", () => {
-    const t = terms({ primary: hashedHeir(new Uint8Array(32).fill(9), first) });
-    const rows = new Map(explainClaim(request(t), vault.toBase58())!.rows);
-    expect(rows.get("first heir")).toMatch(/^private/);
+  it("does not vouch for a private heir: it says it cannot tell who they are, and shows the whole fingerprint", () => {
+    // whoever writes the request can commit to their own address with their own salt, and the address
+    // still derives. The signer must not make that look like a checked heir.
+    const h = hashedHeir(new Uint8Array(32).fill(9), first);
+    const t = terms({ primary: h });
+    const x = explainClaim(request(t), vault.toBase58())!;
+    expect(x.problem).toBeUndefined();
+    const rows = new Map(x.rows);
+    expect(rows.get("who that is")).toMatch(/cannot tell you who a private heir is/);
+    expect(rows.get("who that is")).not.toMatch(/the heirs below, and it is the address above/);
+    expect(rows.get("first heir")).toMatch(/^NOT SHOWN/);
+    expect(rows.get("first heir")).toContain(Buffer.from(h.kind === "hashed" ? h.commitment : []).toString("hex"));
     expect(rows.get("first heir")).not.toContain(first.toBase58());
+    // an heir named openly beside a private one is still shown
+    expect(rows.get("second heir")).toContain(second.toBase58());
+    const both = new Map(explainClaim(request(terms({ contingent: hashedHeir(new Uint8Array(32).fill(4), second) })), vault.toBase58())!.rows);
+    expect(both.get("who that is")).toMatch(/cannot tell you who a private heir is/);
+    expect(both.get("second heir")).toMatch(/^NOT SHOWN/);
   });
 
   it("refuses a claim address the named heirs do not give", () => {

@@ -11,6 +11,7 @@
  *   signer  the offline signer shows the heir by name for the real request, refuses a forged one,
  *           and its signature for a changed plan is accepted by the chain
  *   owner   checks in with the browser's key
+ *   contact the owner's trusted contact pushes the deadline back, once
  *   heir    waits out the owner's silence, opens the waiting period, releases, collects
  *
  * What only a browser can show is tested here and nowhere else: that the bundler's aliases give
@@ -117,6 +118,16 @@ describe("the pages, in a browser, on a local validator", () => {
     const heirWallet = await addressOf(heir, "lamport-heir-local-heir");
     await airdrop(heirWallet, 1);
 
+    // ── the owner's trusted contact: a third person, with a wallet of their own ──
+    const contact = await context.newPage(); watch(contact, "contact");
+    await contact.goto(`${base}/heir/claim.html`);
+    await contact.click("text=Connect wallet");
+    await contact.click("#wlocal");
+    await contact.waitForSelector("text=Disconnect");
+    const contactWallet = await addressOf(contact, "lamport-heir-local-heir");
+    expect(contactWallet.equals(heirWallet)).toBe(false);
+    await airdrop(contactWallet, 0.1);
+
     // ── the owner names the heir; nothing can be created before the heir accepts ──
     await owner.click('.switch button[data-m="hot"]');
     await owner.fill("#hfirst", heirWallet.toBase58());
@@ -154,6 +165,7 @@ describe("the pages, in a browser, on a local validator", () => {
     await owner.click("#husekey");
     const checkinKey = await owner.inputValue("#pcheckin");
     expect(checkinKey.length).toBeGreaterThan(30);
+    await owner.fill("#pcontact", contactWallet.toBase58());
     await owner.fill("#pwin", "90");
     await owner.fill("#pwait", "30");
     await owner.click("#pcheck");
@@ -161,6 +173,7 @@ describe("the pages, in a browser, on a local validator", () => {
     const shown = await owner.locator("#pout dl").innerText();
     expect(shown).toMatch(/a Lamport Heir plan/);
     expect(shown).toContain(heirWallet.toBase58());
+    expect(shown).toMatch(new RegExp(`${contactWallet.toBase58()} · may push the deadline back by 90 days, once`));
     expect(shown).toMatch(/TEST BUILD: one day lasts 1 second/);
 
     await owner.fill("#hwords", words);
@@ -219,6 +232,17 @@ describe("the pages, in a browser, on a local validator", () => {
     await owner.click("#hcheckinnow");
     await owner.waitForFunction(() => { const dt = [...document.querySelectorAll(".seg + div dl.spec dt")].find((d) => d.textContent === "Last check-in"); return !!dt && dt.nextElementSibling?.textContent !== "none"; });
 
+    // ── the trusted contact uses their one extension; the heir is offered no such thing ──
+    await contact.goto(`${base}/heir/claim.html#${vault.toBase58()}`);
+    await contact.waitForSelector("#scontact");
+    expect(await contact.locator("#scontact").innerText()).toMatch(/You are this vault's trusted contact/);
+    await contact.click("#sextend");
+    await contact.waitForSelector("text=you have used your extension");
+    expect(await contact.locator("#sextend").count()).toBe(0);
+    await owner.reload();
+    await owner.click('.seg button[data-t="inheritance"]');
+    await owner.waitForSelector("text=extension used");
+
     // ── the owner goes quiet; something worth inheriting arrives in the vault ──
     await airdrop(vault, 2);
     const before = await connection.getBalance(heirWallet);
@@ -226,8 +250,9 @@ describe("the pages, in a browser, on a local validator", () => {
     await heir.waitForSelector("#spanel h3");
     expect(await heir.locator("#spanel").innerText()).toMatch(/You are the first heir of this vault's plan/);
     expect(await heir.locator("#sstart").count()).toBe(0); // within the owner's time there is nothing to press
+    expect(await heir.locator("#scontact").count()).toBe(0);
 
-    await lookUpUntil(heir, "#sstart", 240);
+    await lookUpUntil(heir, "#sstart", 480); // the window, and the contact's 90 days on top
     await heir.click("#sstart");
     expect(await heir.locator("#spanel .notice.warn").innerText()).toMatch(/only if you believe the owner has died/);
     await heir.click("#sstartyes");

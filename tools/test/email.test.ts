@@ -66,6 +66,18 @@ describe("reminders by email", () => {
     }
   });
 
+  it("does not hand a password to a server that will not encrypt the connection", async () => {
+    // the test server offers no STARTTLS. To this machine that is accepted (the tests above); to any other
+    // name the channel must give up before it authenticates. "localhost." is this machine under another name.
+    const before = received.length;
+    const channel = emailChannel({ smtpUrl: `smtp://user:hunter2@localhost.:${port}`, from: "heir@example.org" });
+    const error = await channel.send("owner@example.org", notice).then(() => undefined, (e: Error) => e);
+    channel.close();
+    expect(error?.message).toMatch(/the mail server did not take the message/);
+    expect(error?.message).not.toMatch(/hunter2/);
+    expect(received.length).toBe(before);
+  });
+
   it("reports a server that cannot be reached without quoting where it tried", async () => {
     const channel = emailChannel({ smtpUrl: "smtp://user:hunter2@127.0.0.1:1", from: "heir@example.org" });
     const error = await channel.send("owner@example.org", notice).then(() => undefined, (e: Error) => e);
