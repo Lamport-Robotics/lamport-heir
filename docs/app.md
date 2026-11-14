@@ -72,10 +72,57 @@ The order is fixed by how plans work, since other heirs are another plan at anot
 4. **The plan's address goes into the form the owner signs**, with the terms, so that the signer
    can make the check above.
 
-The owner's page names heirs by address. Heirs kept private (a salted hash in the plan) need
-their salt on their kit and nowhere else; making such a plan is left to the command-line tools
-for now. Their kit prints the fingerprint the signer shows, and they can collect on the heirs'
-page (below).
+### An heir kept private
+
+A box under each heir's address keeps that heir private: the plan then holds a fingerprint,
+`sha256(domain || salt || address)`, in place of the address, and nothing on chain says who they
+are until they collect (or until they open the waiting period with the same wallet, which the
+heirs' page tells them before they do). Collecting takes the salt as well as the wallet, so a
+salt that is lost is an heir who can never collect. The flow is built around that:
+
+1. **The salt is made when the owner presses "Prepare the plan", and only then.** A form that is
+   rebuilt (a reload, a switch between this device and the offline signer) puts back what the
+   tab remembers and makes nothing: if the browser no longer holds a salt the tab remembers, it
+   says so, and says that a new press makes a new salt and so a new plan.
+2. **The owner writes it down before anything else happens.** The page shows the salt and the
+   fingerprint, offers them as a page to print, and goes no further until the owner types the
+   salt's four check digits. Nothing is created, and no plan address reaches the form, before
+   that.
+3. **The heir gets it in their own link**, `claim.html#accept=<terms>&salt=<salt>`, which no other
+   heir is sent, and which they get even when they are the wallet that pays. Their page
+   recognises their wallet by it, shows it to them to keep, and takes their acceptance. So the
+   salt is in the heir's own hands before the plan exists. A link that lost its end tells the
+   heir what is missing.
+4. **The browser's copy is a convenience, and is checked every time it matters.** It lets the page
+   find the plan again and print the kit. A page cannot know that a browser will keep what it
+   stored: a private window loses it when it closes, and a browser may clear a site's data. The
+   page says so on the slip, asks the browser to keep the data, and before it creates a plan or
+   hands one to the form it reads the salt back and checks that it is the one in the plan. An
+   entry it cannot read is never written over (`app/src/salts.ts`).
+5. **Their acceptance is checked in the owner's page and goes no further.** A named heir's
+   signature goes on chain, where the claim program checks it again; a private heir's would
+   publish the address the plan is keeping private. The check is strict: an address nobody
+   holds accepts nothing. Because the claim program asks nothing of a fingerprint, anyone who
+   has the terms can create such a plan's account, so a plan found on the chain is not taken as
+   accepted: the private heir still gets their link and accepts here, once per plan. The browser
+   test reads the plan's account and the transaction that made it and finds the private heir's
+   address in neither.
+6. **The signer cannot say who they are, and says so.** It shows the fingerprint; the owner
+   compares it with the one they wrote down, which the page shows again beside every plan that
+   has a private heir in it.
+7. **Their kit prints the salt and the fingerprint**, from the browser the plan was made in.
+
+What keeping an heir private does not hide, and where the page says so:
+
+- **Whoever sees the private heir's link, their acceptance line or their kit** learns that this
+  address is an heir of this vault. They can take nothing with it. The heir is told to send
+  their line back to the owner only.
+- **The endpoint.** Once the box is ticked the owner's page asks the network nothing about that
+  address. If it asked before the box was ticked (the owner pressed "Prepare" first), it says so.
+- **A plan that already names them.** The vault's current plan stays on the chain; if it names
+  the address openly, a new plan cannot take that back, and the page says so.
+- **Opening the waiting period.** It is signed, in public, by whoever opens it. The heirs' page
+  tells a visitor to a plan with a private heir that another wallet, or another person, can.
 
 ## The check-in key
 
@@ -190,8 +237,11 @@ wallet the heir made their key for.
 | what | where | count |
 |---|---|---|
 | terms in a request, and the check the signer makes | `app/test/terms.test.ts` | 9 |
-| the acceptance: format, envelope rule, refusals | `app/test/acceptance.test.ts` | 4 |
-| what the heirs' page says, phase by phase, to the trusted contact, and to an heir kept private | `app/test/heir-words.test.ts` | 15 |
+| the acceptance: format, envelope rule, refusals, addresses nobody holds | `app/test/acceptance.test.ts` | 5 |
+| what the heirs' page says, phase by phase, to the trusted contact, and to an heir kept private | `app/test/heir-words.test.ts` | 16 |
+| the link an heir accepts through, with a private heir's salt and without | `app/test/accept-link.test.ts` | 3 |
+| the owner's form for heirs, through a small stand-in for the page: what typing, ticking, rebuilding and losing stored data do | `app/test/composer.test.ts` | 18 |
+| the salts a browser keeps: storage that fails, entries it cannot read | `app/test/salts.test.ts` | 6 |
 | the vault's own request code with this repository's module in its seam, as the signer is built | `app/test/signer-seam.test.ts` | 4 |
 | the link that asks an heir for a reading key | `app/test/letter-view.test.ts` | 2 |
 | the letter itself: keys, the file, forgeries, refusals | `tools/test/letter.test.ts`, `tools/test/cli.test.ts` | 25 + 2 |
@@ -206,6 +256,7 @@ validator, and a headless Chromium clicks through them:
 
 | who | what | what is checked |
 |---|---|---|
+| owner, second heir | names a second heir and keeps them private | the same address twice is refused; nothing goes on until the salt's check digits are typed; the private heir's link carries their salt and the other heir's does not; somebody else with that link is told it is not theirs; the plan's account and the transaction that made it hold the fingerprint and not the address; the owner's summary and the offline signer show the fingerprint, say they cannot say who it is, and never show the address; the kit prints the salt; the heirs' page knows the heir by their salt, refuses a wrong one and one with a digit off, and asks the heir named openly for none |
 | owner | creates a vault; names an heir | the plan cannot be created before the heir accepts; a damaged acceptance is refused |
 | heir | opens the owner's link, signs the sentence | their page says which vault and which place |
 | owner | creates the plan, makes a check-in key, signs on this device | the plan is the claim program's; the summary names the heir; the chain accepts the signature |
@@ -226,9 +277,12 @@ bound the vault's own program id; the chain refused it).
 - Reminders are not wired into the page (the service has no public address yet).
 - The family letter is a file the owner hands over. Nothing stores it for them or delivers it at
   the release, and the owner cannot open a sealed one again.
-- Naming an heir privately from the owner's page. An heir kept private can collect on the heirs'
-  page with their salt, but making such a plan, and the kit that carries the salt, is the
-  command-line tool's. The salt field is tested as words and through the claim code on a
-  validator (`tools/e2e/release.e2e.ts`, vault C), not by the browser test.
+- An heir kept private is not written a family letter from the page: a letter's file says which
+  addresses it is for.
+- A private heir's kit is printed from the browser the plan was made in, which holds the salt.
+  From anywhere else it takes the salt and `lamport-heir kit --salt`.
+- A private heir collecting in a browser is tested up to the page knowing them by their salt. The
+  claim itself with a salt runs on a validator through the same code (`tools/e2e/release.e2e.ts`,
+  vault C), not through the page.
 - Real wallets in the browser test: it uses the test key the pages offer on localhost. Wallet
   Standard wallets and hardware wallets were not driven by a machine or by hand.

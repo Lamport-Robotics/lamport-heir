@@ -46,7 +46,7 @@ export function letterPanel(ctx: HeirCtx, plan: Promise<Terms | null>): HTMLElem
     const heirs: { who: string; address: PublicKey }[] = [];
     if (terms.primary.kind === "address") heirs.push({ who: "first", address: terms.primary.address });
     if (terms.contingent.kind === "address") heirs.push({ who: "second", address: terms.contingent.address });
-    if (terms.primary.kind === "hashed" || terms.contingent.kind === "hashed") body.append(el("p", { class: "quiet" }, "An heir kept private cannot be written to from this page: it does not know their address."));
+    if (terms.primary.kind === "hashed" || terms.contingent.kind === "hashed") body.append(el("p", { class: "quiet" }, "An heir kept private is not written to from this page: a letter's file says which addresses it is for, to anyone who sees it."));
     if (!heirs.length) return;
     if (!ctx.wallet) { body.append(el("p", { class: "quiet" }, "Connect the wallet you pay fees with. It signs the letter, and your heirs make their reading keys for that wallet and no other.")); return; }
     const wallet = ctx.wallet, writer = wallet.pubkey, claim = s.claim;
