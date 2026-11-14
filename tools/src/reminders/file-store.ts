@@ -16,7 +16,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { PublicKey } from "@solana/web3.js";
 import { type Snapshot } from "./schedule.ts";
-import { type Delivery, type Store, type Subscription } from "./service.ts";
+import { type Delivery, isLabel, type Store, type Subscription } from "./service.ts";
 
 const MAGIC = Buffer.from("LHS1");
 
@@ -102,6 +102,7 @@ export class FileStore implements Store {
   /** Adds a subscription, or replaces the one for the same vault. */
   subscribe(sub: Subscription): void {
     new PublicKey(sub.vault); // throws on anything that is not an address
+    if (sub.label !== undefined && !isLabel(sub.label)) throw new Error("a label is a short name: up to 40 letters, digits, spaces, hyphens, underscores or apostrophes");
     this.state.subscriptions = [...this.state.subscriptions.filter((s) => s.vault !== sub.vault), sub];
     this.save();
   }

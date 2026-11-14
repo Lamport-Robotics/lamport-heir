@@ -280,8 +280,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
+            app/package-lock.json
             tools/package-lock.json
             vendor/lamport-vault/sdk/package-lock.json
+            vendor/lamport-vault/web/package-lock.json
 
       - name: Build the vault SDK (from the pinned submodule)
         working-directory: vendor/lamport-vault/sdk
@@ -305,4 +307,16 @@ jobs:
 
       - name: Release, end to end
         working-directory: tools
+        run: npm run e2e
+
+      # The pages as they are shipped, driven by a headless browser against the same validator
+      # and the same two test programs: app/e2e/pages.e2e.ts says what it covers.
+      - name: Install the pages' dependencies
+        run: |
+          (cd vendor/lamport-vault/web && npm ci --ignore-scripts)
+          (cd app && npm ci --ignore-scripts)
+
+      # the browser is the Chrome the runner image comes with
+      - name: The pages, in a browser
+        working-directory: app
         run: npm run e2e

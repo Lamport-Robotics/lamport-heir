@@ -6,10 +6,12 @@
  * cancels an open waiting period, for at most two years past the owner's last vault signature.
  * It can only ever delay a release.
  *
- * The key is made where it will be used and never leaves: in a browser or on a phone it is a
- * WebCrypto key created as non-extractable, so no script, export or backup can read it; it can
- * only be asked to sign. This module never sees its bytes either. Losing it loses nothing: the
- * owner names a new one with a vault signature.
+ * The key is made where it will be used: in a browser or on a phone it is a WebCrypto key created
+ * as non-extractable, so no script can read it or export it; it can only be asked to sign, and
+ * this module never sees its bytes either. That is a property of the browser, not of the disk: a
+ * copy of the whole browser profile carries the key with it, and any script running on the page's
+ * origin can ask it to sign. What such a key can do is delay a release, for a bounded time, and
+ * nothing else. Losing it loses nothing: the owner names a new one with a vault signature.
  *
  * The key pays its own fee (0.000005 SOL a time), from a few cents of SOL the owner sends its
  * address when they arm. Nobody else has to be online for an owner to check in.

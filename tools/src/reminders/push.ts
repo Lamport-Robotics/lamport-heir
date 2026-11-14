@@ -36,9 +36,15 @@ export function parsePushSubscription(to: string): PushSubscriptionJson {
   if (!s || typeof s !== "object" || typeof s.endpoint !== "string" || !s.keys || typeof s.keys.p256dh !== "string" || typeof s.keys.auth !== "string") throw new Error("the push subscription lacks an endpoint or its keys");
   let url: URL;
   try { url = new URL(s.endpoint); } catch { throw new Error("the push subscription's endpoint is not a URL"); }
-  if (url.protocol !== "https:" || url.port !== "" || url.username !== "" || !PUSH_HOSTS.some((h) => h.test(url.hostname))) throw new Error("the push subscription's endpoint is not a browser's push service");
+  // the part between "https://" and the first slash, as it was written: a host a browser's push service
+  // gives out is plain letters, digits, dots and hyphens. Anything else (an escape, a credential, a port)
+  // is a URL that two parsers may read differently, and the library that posts has its own parser.
+  const authority = /^https:\/\/([^/?#]*)/i.exec(s.endpoint)?.[1] ?? "";
+  if (!/^[A-Za-z0-9.-]+$/.test(authority) || authority.toLowerCase() !== url.hostname) throw new Error("the push subscription's endpoint is not a browser's push service");
+  if (url.protocol !== "https:" || url.port !== "" || url.username !== "" || url.password !== "" || !PUSH_HOSTS.some((h) => h.test(url.hostname))) throw new Error("the push subscription's endpoint is not a browser's push service");
   if (!/^[A-Za-z0-9_-]{80,100}$/.test(s.keys.p256dh) || !/^[A-Za-z0-9_-]{16,32}$/.test(s.keys.auth)) throw new Error("the push subscription's keys are not well formed");
-  return { endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } };
+  // the address as this parser understood it, not as it was written
+  return { endpoint: url.href, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } };
 }
 
 /** A new VAPID key pair, for a service's first start. */

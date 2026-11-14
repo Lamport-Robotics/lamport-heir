@@ -49,6 +49,13 @@ with the right address and another first heir in its terms was refused.
 A request with no terms (a plain address, typed by the owner) is shown as the vault's own build
 shows it: "this signer only sees an address".
 
+**A private heir is not vouched for.** A plan can hold a salted hash of an heir's address instead
+of the address. The derivation above still proves the address is a plan for this vault with those
+terms, but whoever wrote the request could have made the hash from their own address and salt. So
+for such an heir the signer says it cannot tell who they are, prints the whole fingerprint, and
+tells the owner to compare it with the one on the kit they printed. (An independent review found
+that the first version made a private heir look checked.)
+
 ## Naming heirs
 
 The order is fixed by how plans work, since other heirs are another plan at another address:
@@ -88,7 +95,9 @@ nothing but the Solana endpoint. What it does on chain is what `tools/` does, by
 - **opening the waiting period**, once the owner's deadline has passed, behind a sentence that
   says what it means and that it is public;
 - **releasing and collecting**: every step that is still undone, then the withdrawal, each step
-  listed with its transaction or with the reason a token could not be moved.
+  listed with its transaction or with the reason a token could not be moved;
+- **for the owner's trusted contact**, whose wallet is neither heir's: the one thing their key can
+  do, pushing the deadline back by 90 days, once.
 
 The sentences are in `app/src/heir-words.ts`, apart from the page, and tested as text.
 
@@ -98,19 +107,31 @@ The sentences are in `app/src/heir-words.ts`, apart from the page, and tested as
 |---|---|---|
 | terms in a request, and the check the signer makes | `app/test/terms.test.ts` | 9 |
 | the acceptance: format, envelope rule, refusals | `app/test/acceptance.test.ts` | 4 |
-| what the heirs' page says, phase by phase | `app/test/heir-words.test.ts` | 12 |
+| what the heirs' page says, phase by phase, and to the trusted contact | `app/test/heir-words.test.ts` | 14 |
+| the vault's own request code with this repository's module in its seam, as the signer is built | `app/test/signer-seam.test.ts` | 4 |
 
 The tests run with the same alias and constants as the build, so they see the SDK the way the
 built pages do.
 
-**In a browser, by hand, 2026-11-13**, on a local validator running the `short-clocks` builds of
-both programs (`HEIR_CLOCK=short HEIR_RPC=http://127.0.0.1:8899 npm run build`): a vault created
-on the page; an heir named; the heir's acceptance signed on `claim.html` and pasted back; the
-plan created; the plan signed and armed from the page, with a check-in key made in that browser;
-a check-in; the request shown by the offline signer with the heir's name, and a forged one
-refused; then, as the heir, the waiting period opened, the vault released and its 3 SOL
-collected, and the same read back by `tools/src/cli.ts status`. There is no automated browser
-test yet.
+**In a browser** (`app/e2e/pages.e2e.ts`, `npm run e2e`, part of CI's end-to-end job; it uses the
+Chrome installed on the machine, or with `HEIR_E2E_BROWSER=chromium` the one Playwright installs). The pages
+are built as they are shipped, as a test build for the `short-clocks` programs and a local
+validator, and a headless Chromium clicks through them:
+
+| who | what | what is checked |
+|---|---|---|
+| owner | creates a vault; names an heir | the plan cannot be created before the heir accepts; a damaged acceptance is refused |
+| heir | opens the owner's link, signs the sentence | their page says which vault and which place |
+| owner | creates the plan, makes a check-in key, signs on this device | the plan is the claim program's; the summary names the heir; the chain accepts the signature |
+| signer | is given a forged request, then the real one | the forged one is refused and cannot be signed; the real one shows the heir by name and never the words "close the vault"; its signature is accepted by the chain; the words are gone from the page afterwards |
+| owner | checks in with the browser's key | the chain records it |
+| contact | pushes the deadline back | offered to the contact's wallet only, once; the owner's page then shows the extension as used |
+| heir | waits, opens the waiting period, releases, collects | nothing can be pressed while the owner is within their time; the vault's 2 SOL arrives in the heir's wallet |
+
+It also fails on any uncaught error in any of the three pages. What only a browser can show is
+tested here and nowhere else: that the bundler's aliases give the pages the Heir program's id,
+signed message and encoder. The first run by hand found exactly such a fault (the signed message
+bound the vault's own program id; the chain refused it).
 
 ## Not done
 
@@ -118,4 +139,5 @@ test yet.
 - Reminders are not wired into the page (the service has no public address yet).
 - The family letter has its code (`tools/src/letter.ts`) and no page.
 - Heirs kept private, in the page.
-- An automated run of the pages in a browser.
+- Real wallets in the browser test: it uses the test key the pages offer on localhost. Wallet
+  Standard wallets and hardware wallets were not driven by a machine or by hand.

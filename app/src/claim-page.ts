@@ -15,13 +15,14 @@ import "../../vendor/lamport-vault/web/src/interface.css";
 import { PublicKey } from "@solana/web3.js";
 import { $, CLUSTER, copy, el, isPubkey, short, txLink } from "../../vendor/lamport-vault/web/src/common.ts";
 import { rpc } from "../../vendor/lamport-vault/web/src/rpc.ts";
-import type { Chain } from "../../tools/src/chain.ts";
+import { contactExtendInstruction, successionLimits } from "@lamport-robotics/vault";
+import { send, type Chain } from "../../tools/src/chain.ts";
 import { acceptanceMessage, checkTerms, planAddress, type Terms } from "../../tools/src/claim.ts";
 import { claim } from "../../tools/src/claiming.ts";
 import { inspect, start, type Situation, type Step } from "../../tools/src/release.ts";
 import { acceptanceBytes, isAcceptanceOf, writeAcceptance } from "./acceptance.ts";
 import { connect, listWallets, localTestWallet, onWalletsChange, type HeirWallet } from "./heir-wallet.ts";
-import { placeInTerms, situationWords, stepWords, verdictWords } from "./heir-words.ts";
+import { contactWords, durationInDays, placeInTerms, situationWords, stepWords, verdictWords } from "./heir-words.ts";
 import { buildPrograms, termsFromJson } from "./terms.ts";
 
 const chain = rpc as unknown as Chain;
@@ -106,7 +107,7 @@ function acceptView(link: string): HTMLElement {
     el("dl", { class: "spec" },
       el("dt", {}, "Vault"), el("dd", {}, terms.vault.toBase58()),
       el("dt", {}, "First heir"), el("dd", {}, heir(terms.primary)),
-      el("dt", {}, "Second heir"), el("dd", {}, terms.contingent.kind === "none" ? "none" : `${heir(terms.contingent)} · if the first has not claimed ${terms.contingentDelaySecs / programs.daySecs} days after the release`),
+      el("dt", {}, "Second heir"), el("dd", {}, terms.contingent.kind === "none" ? "none" : `${heir(terms.contingent)} · if the first has not claimed ${durationInDays(terms.contingentDelaySecs, programs.daySecs)} after the release`),
       el("dt", {}, "Plan"), el("dd", {}, plan.toBase58())));
   const panel = el("div", { class: "panel" }, el("div", { class: "eyebrow" }, "Accept"),
     el("p", { class: "quiet" }, "You sign one sentence with your wallet. It moves nothing, costs nothing, and gives nobody access to your wallet. It is this sentence, and nothing else:"),
@@ -170,6 +171,21 @@ async function paintSituation(panel: HTMLElement, address: PublicKey) {
     steps.classList.remove("hidden");
     for (const st of list) { const t = stepWords(st); const li = el("li", { class: t.outcome === "done" ? "done" : "" }, el("span", {}, t.name)); li.append(t.outcome === "done" ? txLink(t.detail, 5) : el("span", { class: "quiet", style: "margin-left:auto;font-size:12px" }, t.detail)); steps.append(li); }
   };
+  // the owner's trusted contact is not an heir, and has one button of their own
+  const contact = contactWords(s, wallet?.publicKey, successionLimits({ daySecs: s.programs.daySecs }).contactExtensionSecs / s.programs.daySecs);
+  if (contact) {
+    const box = el("div", { class: "notice", id: "scontact", style: "margin-top:16px" }, el("div", {}, contact.text));
+    if (contact.canExtend) {
+      const extend = el("button", { class: "btn sm", id: "sextend", style: "margin-top:12px" }, "Push the deadline back");
+      box.append(extend);
+      extend.addEventListener("click", async () => {
+        err.classList.add("hidden"); extend.setAttribute("disabled", "");
+        try { await send(chain, [wallet!], [contactExtendInstruction({ programId: s.programs.vault, vault: s.vault, contactKey: wallet!.publicKey })]); await paintSituation(panel, address); }
+        catch (e) { report(e); extend.removeAttribute("disabled"); }
+      });
+    }
+    acts.before(box);
+  }
   if (w.next === "nothing") return;
   if (!wallet) { const b = el("button", { class: "btn" }, "Connect a wallet to go on"); b.addEventListener("click", pickWallet); acts.append(b); return; }
   if (w.next === "start") {

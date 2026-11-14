@@ -8,10 +8,13 @@ waiting period. Any signature or check-in from the owner cancels it. If none com
 releases to a claim account, and only the heirs the owner named can withdraw from it. The same plan
 arms and watches Pincer1's own dead-man's switch for the robot's wallet.
 
-**Status: milestone 4 in progress.** The claim program, the vault's inactivity clock, the finisher,
-the claim tool and the claim kit are merged and tested. The app and reminders are being built; the
-Pincer1 link does not exist yet. Nothing is deployed. Local validators and devnet only. Nothing in
-this repository is audited.
+**Status: milestone 4, one step short.** The claim program, the vault's inactivity clock, the
+finisher, the claim tool and the claim kit are merged and tested. The pages, the offline signer's
+Heir build and the reminder service are built and tested; what is left of milestone 4 is its
+gate, one whole cycle on devnet, which has run on a local validator only
+([`docs/devnet.md`](docs/devnet.md)). The Pincer1 link and the audit guide are in pull requests
+stacked on this one. **Nothing is deployed.** Local validators and devnet only. Nothing in this
+repository is audited.
 
 - Spec: [Lamport Heir spec](https://claude.ai/artifact/G1AFWhoqMZqufobPxZRNuC)
 - How the spec maps onto the vault and the Pincer1 daemon, and where it does not fit:
@@ -74,9 +77,9 @@ npm test && npm run build                                           # app/dist/h
 | M1 | claim program: `init_plan`, `activate`, `claim_sol`, `claim_token`, optional hashed heirs | merged |
 | M2 | Heir-enabled vault: succession state, `SetSuccession`, check-ins, the waiting period, release | merged |
 | M3 | permissionless finisher, claim command-line tool, printable claim kit | merged |
-| M4 | app and reminder service | in progress |
-| M5 | Pincer1 link | in review |
-| M6 | audit preparation | not started |
+| M4 | app and reminder service | built; the devnet run is outstanding ([#5](https://github.com/Lamport-Robotics/lamport-heir/pull/5)) |
+| M5 | Pincer1 link | built, passes against the daemon's simulator ([#6](https://github.com/Lamport-Robotics/lamport-heir/pull/6)) |
+| M6 | audit preparation | a guide, in draft ([#7](https://github.com/Lamport-Robotics/lamport-heir/pull/7)); no frozen commit yet |
 
 ## Rules this is built under
 
@@ -87,7 +90,7 @@ npm test && npm run build                                           # app/dist/h
   the feature off, the vault builds to exactly the program it is today.
 - No change to Pincer1's firmware, controller or daemon.
 - The AI parts advise. The model never sets a plan field the owner has not accepted, and never sees
-  keys, seeds or balances.
+  keys, seeds or balances. (Version 1 ships none: `docs/decisions.md`, milestone 4.)
 
 ## License
 
