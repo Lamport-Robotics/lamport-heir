@@ -12,7 +12,7 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { type PublicKey } from "@solana/web3.js";
 import QRCode from "qrcode";
-import { heirMatches, planAddress, type Terms } from "./claim.ts";
+import { heirCommitment, heirMatches, planAddress, type Terms } from "./claim.ts";
 import { type Programs } from "./programs.ts";
 
 export interface KitInput {
@@ -194,7 +194,7 @@ ${salt ? `<figure>${qr(salt, 34)}<br>Your salt</figure>` : ""}
 </div>
 ${
   salt
-    ? `<div class="warn"><p><strong>Your salt.</strong> The plan does not publish your address. It stores a hash of your address and this salt, and your claim must show the salt. Without it you cannot claim, and nobody can recover it for you. The last four digits are a check against typing mistakes.</p><p class="salt">${esc(group(salt.slice(0, 64), 8))} - ${esc(salt.slice(65))}</p></div>`
+    ? `<div class="warn"><p><strong>Your salt.</strong> The plan does not publish your address. It stores a hash of your address and this salt, and your claim must show the salt. Without it you cannot claim, and nobody can recover it for you. The last four digits are a check against typing mistakes.</p><p class="salt">${esc(group(salt.slice(0, 64), 8))} - ${esc(salt.slice(65))}</p><p><strong>Your fingerprint.</strong> This is what the plan stores in place of your address. When the owner signs the plan, their offline signer shows a fingerprint and cannot tell whose it is: it has to be this one, character for character.</p><p class="salt">${esc(group(hex(heirCommitment(input.salt!, input.heirAddress)), 8))}</p></div>`
     : ""
 }
 

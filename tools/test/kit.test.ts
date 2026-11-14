@@ -115,6 +115,12 @@ describe("the page", () => {
     expect(html).toContain(`--salt ${text}`);
     expect(html).toContain("not published");
     expect(html.match(/<svg /g)!.length).toBe(3); // vault, plan, salt
+    // the fingerprint the owner's offline signer shows for this heir, to compare character for character
+    if (hashed.primary.kind !== "hashed") throw new Error("the test's terms changed");
+    const fingerprint = Buffer.from(hashed.primary.commitment).toString("hex");
+    expect(html).toContain("Your fingerprint");
+    expect(html).toContain(fingerprint.match(/.{8}/g)!.join(" "));
+    expect(renderKit(input())).not.toContain("Your fingerprint");
     expect(html).not.toContain("letter-open"); // nobody can write to an heir whose address is not known
   });
 
