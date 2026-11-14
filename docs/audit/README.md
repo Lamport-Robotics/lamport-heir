@@ -5,8 +5,9 @@ this and a frozen commit: milestone 4's gate is a cycle on devnet, which has run
 validator only ([`../devnet.md`](../devnet.md)), and nothing is deployed anywhere.
 
 Nothing here has been audited. Two reviewers who had not seen the code read both programs before
-they were merged (their findings are at the end); that is a review, not an audit. **The pages and
-the offline signer's Heir build have been reviewed by nobody but their author.**
+they were merged, and a third read the pages, the offline signer's Heir build and the reminder
+channels after they were written (the findings of all three are at the end). Those are reviews,
+by reading, not an audit.
 
 ## What moves funds
 
@@ -102,11 +103,12 @@ removes or weakens that rule and requires a test to notice (`tests/mutants/` in 
 | S3 | What is signed is the request that was shown: the same five fields, encoded as the program decodes them | `requests become the bytes and the messages of kat/succession_encoding.json` (the vectors the program's own tests read) |
 | S4 | A plan the program would refuse is refused before it costs a one-time key | `a plan the program would refuse is refused before it costs a one-time key`; `removing a plan has one spelling` |
 | S5 | When a request names heirs, the signer derives the plan's address from them and refuses anything short of an exact match | `app/test/terms.test.ts`: `refuses a claim address the named heirs do not give`, `refuses a plan made for another vault`, `refuses terms the claim program would refuse, and terms it cannot read`, `are read strictly` |
-| S6 | If the signer cannot show the plan, it shows nothing and signs nothing | `showPlan` throws and the caller clears the request (lamport-vault `web/src/signer.ts`, after the `try` block); read, not tested |
+| S6 | If the signer cannot show the plan, it shows nothing and signs nothing; a request the seam objects to is never described | `showPlan` throws and the caller clears the request (lamport-vault `web/src/signer.ts`, after the `try` block), read; `app/test/signer-seam.test.ts` runs the vault's request code with this repository's module in its seam: `refuses a request that shows the owner's heirs and pays somebody else's plan, and describes nothing`; `app/e2e/pages.e2e.ts` gives the built signer a forged request and then presses Sign |
 | S7 | The Heir signer holds no code that talks to a network | `app/build.mjs` fails the build otherwise; the page's CSP is `connect-src 'none'` |
 | S8 | The page creates a plan only after every heir named by address has signed for it | `app/test/acceptance.test.ts`; the claim program checks the same signatures again (C7) |
-| S9 | The page refuses a claim address that nothing exists at and no key signs for, a program, a token account, and a vault whose plan names this one | `claimProblemOnChain` in lamport-vault `web/src/heir-page.ts`; tried by hand, **no automated test** |
+| S9 | The page refuses a claim address that nothing exists at and no key signs for, a program, a token account, and a vault whose plan names this one; it says so when an address is a program's and holds only SOL | `claimProblemOnChain`, `claimNoteOnChain` in lamport-vault `web/src/heir-page.ts`; the browser test covers the first case (the plan's address before the plan exists), the rest are read, **not tested** |
 | S10 | The heirs' page asks for no key and no seed phrase | by reading: `app/claim.html` and `app/src/claim-page.ts` have one text field, for an address |
+| S11 | The three pages work together, built as they are shipped, from an empty wallet to an heir holding the vault's SOL | `app/e2e/pages.e2e.ts`, a headless browser on a local validator; it also fails on any uncaught error in a page |
 
 The terms in a request (S5) are not part of what is signed: the signature covers the claim
 address, which is all the vault program knows. The terms are how the signer explains that
@@ -120,9 +122,9 @@ address, and it accepts them only when they hash to it.
 | O2 | Nothing off chain chooses where funds go | every destination is read from the vault's plan or tombstone |
 | O3 | No tool asks for, prints, logs or stores a key or a seed phrase | `refuses options it does not have, a seed phrase option among them`; `is never quoted in an error`; the kit's `holds no key` test; the check-in key is non-extractable (`cannot be read out, by anything`) |
 | O4 | The reminder service holds no key and sends no transaction | `says nothing while nothing is due, and sends nothing to the chain, ever` |
-| O5 | No reminder contains a link or asks for a secret | `never contains a link, and never asks for a secret`, for every kind of notice and both audiences |
+| O5 | No reminder contains a link or asks for a secret | `never contains a link, and never asks for a secret`, for every kind of notice and both audiences; the owner's label for a vault, which every message prints, is held to a short name (`refuses what it cannot use`) |
 | O6 | The Pincer1 link cannot clear or release the robot's switch | `has no way to clear or release the switch` |
-| O7 | Email is plain text to exactly one address, and no error repeats the mail account's password | `tools/test/email.test.ts`, against a mail server on the test machine |
+| O7 | Email is plain text to exactly one address, no error repeats the mail account's password, and the password is not sent over a connection that is not encrypted | `tools/test/email.test.ts`, against a mail server on the test machine: `does not hand a password to a server that will not encrypt the connection` |
 | O8 | The service posts notifications only to browser makers' push services | `refuses an endpoint that is not a browser's push service: the service posts to it`; `never posts for a subscription it refuses` |
 | O9 | The service's own keys are written to a file only its user can read and are never shown | `makes its keys into a file only its user can read, and shows no private half` |
 | O10 | The check-in key kept in a browser cannot be read out | made non-extractable (`tools/src/checkin.ts`); `app/src/keystore.ts` refuses to store one that is not |
@@ -138,8 +140,11 @@ Stated plainly, so that nobody finds them by surprise.
 2. **A ring of three or more vaults naming each other** would trap a release among their
    tombstones. The program refuses a ring of two.
 3. **Tokens of a mint with a Token-2022 transfer hook are not moved.** They are reported and stay
-   where they are. A fix for the vault's own transfers is being prepared in lamport-vault, as a
-   change to the vault program in its own right.
+   where they are. A fix for the vault's own transfers is open as
+   [lamport-vault#8](https://github.com/Lamport-Robotics/lamport-vault/pull/8): it changes the
+   vault program itself, so it is the project owner's to merge and deploy. It hands a hook's
+   accounts to the token program and never passes anybody's signature on. `heir-claim`'s
+   `claim_token` has the same gap and gets the same change once that one is on `main`.
 4. **Non-transferable, frozen and paused tokens** stay until their issuer lets them move, or for
    ever. They hold nothing else back.
 5. **The acceptance message is accepted inside an off-chain message envelope that is not parsed**,
@@ -149,8 +154,10 @@ Stated plainly, so that nobody finds them by surprise.
 7. **Whoever holds an heir's key at the time receives the funds.**
 8. **A check-in key that is stolen can delay a release by up to two years** past the owner's last
    vault signature, and a contact's key once by 90 days. That is their whole power.
-9. **The pages have no automated browser test.** They were tried by hand, end to end, against a
-   local validator ([`../app.md`](../app.md)); their logic is tested without a browser.
+9. **The browser test uses a test wallet.** A headless browser drives the pages from an empty
+   wallet to an heir holding the vault's SOL ([`../app.md`](../app.md)), with the key the pages
+   offer on localhost. No Wallet Standard wallet and no hardware wallet has been driven, by a
+   machine or by hand.
 10. **The page names heirs by address only.** Heirs kept private (a salted hash) go through the
     command-line tools.
 11. **Nobody can sign up for reminders from the page.** Whoever runs the service adds vaults by
@@ -158,6 +165,15 @@ Stated plainly, so that nobody finds them by surprise.
 12. **Whoever controls the page an owner uses can lie on that page.** The offline signer is the
     defence, and it covers what is signed: the claim address and who is behind it, the durations,
     the two keys. It cannot cover what the page says afterwards about the state of the chain.
+13. **The signer cannot say who a private heir is.** For an heir kept as a salted hash it shows
+    the whole fingerprint and says it cannot tell whose address is behind it. The owner's only
+    reference is the kit they printed.
+14. **An heir's claim has no limit on new token accounts.** Anyone can make a released vault's
+    address hold worthless tokens; each one the heir sweeps and claims is a wallet prompt and
+    about 0.002 SOL of rent, which comes back when the account is closed. The heir can decline
+    any of them. (The finisher, which pays for strangers, does have a limit.)
+15. **A copy of a browser profile carries the check-in key with it**, and any script on the
+    page's origin can ask it to sign. What it signs can only delay a release (limit 8).
 
 ## Where the spec was not followed
 
@@ -177,15 +193,56 @@ before the merge:
 - two vaults naming each other were accepted (limit 2);
 - creating a plan after a release demanded proofs that a missing heir could not give (C9).
 
+## Review of the pages, the signer's Heir build and the channels
+
+A third reviewer, who had not seen them, read the Heir build of the signer and the page in
+lamport-vault, everything in `app/`, the wallet signing in `tools/src/chain.ts` and the reminder
+channels. By reading, with small scripts against the request code; nothing was built or run in a
+browser by the reviewer.
+
+**Not found:** a way to make the Heir signer show one plan and sign another, show a claim
+address, heirs, durations or keys other than those in the signed bytes, sign a plan while showing
+another action, or sign for another program or vault. The screen and the encoder read the same
+five fields; base58 parsing is exact; seventeen hostile requests (duplicate and `__proto__` keys,
+full-width digits, leading zeros, stray whitespace) were either refused or gave the same screen
+and the same bytes. The terms encoding, hash and address derivation match the claim program's
+Rust rule for rule. No untrusted data reaches `innerHTML`, a link or CSS in the pages, and the
+kit escapes everything it prints. Every change to the vault's own page and signer is behind the
+build constant, a type-only cast, or folds to the old value.
+
+**Found and fixed:**
+
+- the signer made a private (hashed) heir look checked (limit 13, S5);
+- the push endpoint was checked with one URL parser and posted to with another (O8);
+- `smtp://` went on without TLS, password included, when a server did not offer it (O7);
+- a vault's label, printed in every message, could carry a link (O5);
+- the plan form's refusal of an address with nothing behind it was defeated by one lamport sent
+  there: it is still accepted, since a multisig's vault looks the same, and the form now says
+  what it is (S9);
+- the request code could have described a request the seam objects to, with the claim's row
+  missing: it now refuses to describe it (S6);
+- smaller: a delay rounded down on the acceptance page, an endpoint's full address in the
+  cycle's report, a comment that overstated what "non-extractable" protects.
+
+**Open, outside this repository:** one finding is in the vault's own signer, which the Heir
+signer is built from. A fix is written and is with the project owner; it is not described here
+until it is published.
+
+**Not covered by that review:** `tools/src/cli.ts`, `finisher.ts`, `letter.ts`, `plan/`, the
+reminder schedule and service beyond the send loop, the programs beyond the terms and the proof
+of control, real wallets, and byte identity of the vault's own build (checked separately, by
+building).
+
 ## Running everything
 
 ```sh
 cargo test --workspace                                   # 23
 (cd tests/svm && cargo test)                             # 49, both programs in LiteSVM
 python3 tests/mutants/run.py                             # 23 mutants, after a green baseline
-(cd tools && npm test)                                   # 142
+(cd tools && npm test)                                   # 143
 (cd tools && npm run build:programs && npm run e2e)      # a local validator: four releases, the whole cycle, the Pincer1 link
-(cd app && npm test && npm run build)                    # 25; then app/dist/heir/, with the signer's checks
+(cd app && npm test && npm run build)                    # 31; then app/dist/heir/, with the signer's checks
+(cd app && npm run e2e)                                  # the pages in a headless browser, on the same validator
 ```
 
 and in lamport-vault: `cargo test --workspace --features lamport-lms/sign,lamport-vault/succession`,
