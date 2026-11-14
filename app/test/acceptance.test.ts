@@ -61,4 +61,25 @@ describe("an heir's acceptance", () => {
     expect(read(JSON.stringify({ ...a, signed: "%%%" }))).toThrow(/damaged/);
     expect(read(JSON.stringify({ ...a, v: 2 }))).toThrow(/not an acceptance/);
   });
+
+  it("is never taken from an address of small order, for which anyone can write down a signature", () => {
+    // the eight such addresses, the all-zero default address among them. R = the neutral point, S = 0 "signs" anything
+    // for them under the lenient rule, and for an heir kept private there is no check on the chain behind this one
+    const small = [
+      "0100000000000000000000000000000000000000000000000000000000000000",
+      "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+      "0000000000000000000000000000000000000000000000000000000000000000",
+      "0000000000000000000000000000000000000000000000000000000000000080",
+      "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+      "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+      "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+      "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+    ].map((h) => new PublicKey(Buffer.from(h, "hex")));
+    expect(small[2]!.equals(PublicKey.default)).toBe(true);
+    const forged = new Uint8Array(64); forged[0] = 1;
+    for (const nobody of small) {
+      expect(PublicKey.isOnCurve(nobody.toBytes())).toBe(true); // nothing else in the page would stop it
+      expect(() => readAcceptance(writeAcceptance(plan, nobody, acceptanceBytes(plan), forged), { plan, heir: nobody }), nobody.toBase58()).toThrow(/does not belong to that address/);
+    }
+  });
 });

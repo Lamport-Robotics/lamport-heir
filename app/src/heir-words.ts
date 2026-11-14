@@ -34,15 +34,19 @@ export function durationInDays(secs: bigint, daySecs: bigint): string {
   return `${n} day${n === 1n ? "" : "s"}`;
 }
 
-function isHeir(h: HeirRef, me: PublicKey): boolean {
-  return h.kind === "address" && h.address.equals(me);
-}
-
-/** an heir's place in a plan's terms: for the acceptance, before any plan exists */
-export function placeInTerms(terms: Terms, me: PublicKey, daySecs: bigint): { named: boolean; text: string } {
-  if (isHeir(terms.primary, me)) return { named: true, text: "You are the first heir. Once the vault has been released, you may claim everything in it." };
-  if (isHeir(terms.contingent, me)) return { named: true, text: `You are the second heir. You may claim if the first heir has not, from ${durationInDays(terms.contingentDelaySecs, daySecs)} after the vault is released.` };
-  return { named: false, text: "The wallet you connected is not one of the addresses this plan names. Connect the wallet whose address you gave the owner." };
+/**
+ * An heir's place in a plan's terms: for the acceptance, before any plan exists. `salt` comes with
+ * the link of an heir the plan keeps private, and is what lets their page tell that the fingerprint
+ * in the terms is theirs.
+ */
+export function placeInTerms(terms: Terms, me: PublicKey, daySecs: bigint, salt?: Uint8Array): { named: boolean; private: boolean; text: string } {
+  const kept = (h: HeirRef) => (h.kind === "hashed" ? " The plan keeps you private: it holds a fingerprint in place of your address, and collecting takes the salt below as well as your wallet." : "");
+  if (heirMatches(terms.primary, me, salt)) return { named: true, private: terms.primary.kind === "hashed", text: `You are the first heir. Once the vault has been released, you may claim everything in it.${kept(terms.primary)}` };
+  if (heirMatches(terms.contingent, me, salt)) return { named: true, private: terms.contingent.kind === "hashed", text: `You are the second heir. You may claim if the first heir has not, from ${durationInDays(terms.contingentDelaySecs, daySecs)} after the vault is released.${kept(terms.contingent)}` };
+  if (salt) return { named: false, private: false, text: "This link is for an heir the plan keeps private, and the wallet you connected is not the one it was made for. Connect the wallet whose address you gave the owner." };
+  // an heir kept private is known only by the salt at the end of their own link: a link that lost it, or the other heir's link, cannot know them
+  if (keepsAnHeirPrivate(terms)) return { named: false, private: false, text: "The wallet you connected is not an address this plan names openly. The plan also keeps an heir private. If that is you, this is not your link, or its end is missing: yours ends in \"&salt=\" and 64 characters. Ask the owner for your own link again. Otherwise, connect the wallet whose address you gave the owner." };
+  return { named: false, private: false, text: "The wallet you connected is not one of the addresses this plan names. Connect the wallet whose address you gave the owner." };
 }
 
 /** true when the plan keeps an heir private: named by a salted hash, which only the salt on their kit fits */

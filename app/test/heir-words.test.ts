@@ -137,9 +137,31 @@ describe("the trusted contact", () => {
 
 describe("an heir's place, before the plan exists", () => {
   it("tells each heir which they are, and anyone else that they are not named", () => {
-    expect(placeInTerms(terms, first, DAY)).toMatchObject({ named: true });
+    expect(placeInTerms(terms, first, DAY)).toMatchObject({ named: true, private: false });
     expect(placeInTerms(terms, second, DAY).text).toMatch(/second heir.*from 365 days after/);
     expect(placeInTerms(terms, stranger, DAY)).toMatchObject({ named: false });
+  });
+
+  it("knows an heir kept private by the salt their link carries, and nobody by a salt alone", () => {
+    const salt = Uint8Array.from({ length: 32 }, (_, i) => 3 * i + 1);
+    const privately: Terms = { ...terms, contingent: hashedHeir(salt, second) };
+    const mine = placeInTerms(privately, second, DAY, salt);
+    expect(mine).toMatchObject({ named: true, private: true });
+    expect(mine.text).toMatch(/You are the second heir.*The plan keeps you private.*the salt below as well as your wallet/);
+    // without the salt the same wallet is nobody, and so is another wallet with it
+    expect(placeInTerms(privately, second, DAY)).toMatchObject({ named: false });
+    const other = placeInTerms(privately, stranger, DAY, salt);
+    expect(other).toMatchObject({ named: false });
+    expect(other.text).toMatch(/not the one it was made for/);
+    // the heir named openly in the same plan is told nothing about salts, even from the private heir's link
+    expect(placeInTerms(privately, first, DAY, salt)).toMatchObject({ named: true, private: false });
+    expect(placeInTerms(privately, first, DAY, salt).text).not.toMatch(/private/);
+    // their own link with its end cut off, or the other heir's link: they are told what is missing, not that they have the wrong wallet
+    const cut = placeInTerms(privately, second, DAY);
+    expect(cut.named).toBe(false);
+    expect(cut.text).toMatch(/keeps an heir private\. If that is you, this is not your link, or its end is missing.*Ask the owner for your own link again/);
+    // and a plan that keeps nobody private says no such thing
+    expect(placeInTerms(terms, stranger, DAY).text).not.toMatch(/private/);
   });
 });
 

@@ -67,7 +67,9 @@ export function readAcceptance(text: string, expect: { plan: PublicKey; heir: Pu
   if (signature.length !== 64) throw new Error("That acceptance is damaged: the signature is not 64 bytes.");
   if (!isAcceptanceOf(signed, expect.plan)) throw new Error("What was signed is not the acceptance sentence for this plan.");
   let ok = false;
-  try { ok = ed25519.verify(signature, signed, expect.heir.toBytes()); } catch { ok = false; }
+  // strictly: under the lenient rule an address of small order, which nobody holds, "signs" anything, and for an heir
+  // kept private there is no check on the chain behind this one
+  try { ok = ed25519.verify(signature, signed, expect.heir.toBytes(), { zip215: false }); } catch { ok = false; }
   if (!ok) throw new Error("The signature does not belong to that address. The heir should sign again with the wallet of the address named here.");
   return { heir: expect.heir, signed, signature };
 }
