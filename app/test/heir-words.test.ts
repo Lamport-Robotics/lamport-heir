@@ -1,10 +1,10 @@
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { successionStatus, type SuccessionState } from "@lamport-robotics/vault";
 import { describe, expect, it } from "vitest";
-import type { PlanAccount, Terms } from "../../tools/src/claim.ts";
+import { hashedHeir, type PlanAccount, type Terms } from "../../tools/src/claim.ts";
 import { PROGRAMS } from "../../tools/src/programs.ts";
 import type { Situation } from "../../tools/src/release.ts";
-import { contactWords, placeInTerms, situationWords, stepWords, verdictWords, when } from "../src/heir-words.ts";
+import { contactWords, keepsAnHeirPrivate, placeInTerms, situationWords, stepWords, verdictWords, when } from "../src/heir-words.ts";
 
 const DAY = 86_400n, T0 = 1_800_000_000n;
 const vault = Keypair.generate().publicKey, first = Keypair.generate().publicKey, second = Keypair.generate().publicKey, stranger = Keypair.generate().publicKey;
@@ -52,6 +52,42 @@ describe("where a vault stands, in words", () => {
     expect(stranger_.lines.join(" ")).toMatch(/not named by this vault/);
     const waiting = situationWords(released(now, done), second);
     expect(waiting.lines.join(" ")).toMatch(/As the second heir you may claim from/);
+  });
+
+  it("knows an heir kept private by their salt, and offers a wallet without the right one nothing", () => {
+    const salt = Uint8Array.from({ length: 32 }, (_, i) => i + 1), otherSalt = new Uint8Array(32).fill(7);
+    // the first heir is private; the second is named openly
+    const privately: Terms = { ...terms, primary: hashedHeir(salt, first) };
+    expect(keepsAnHeirPrivate(privately)).toBe(true);
+    expect(keepsAnHeirPrivate(terms)).toBe(false);
+    const now = T0 + 500n * DAY;
+    const done = { terms: privately, activated: true, activatedTs: now - DAY, contingentClockTs: now - DAY };
+
+    const unknown = situationWords(released(now, done), first);
+    expect(unknown.next).toBe("nothing");
+    expect(unknown.lines.join(" ")).toMatch(/keeps an heir private: if that is you, enter the salt printed on your kit/);
+
+    const known = situationWords(released(now, done), first, salt);
+    expect(known.next).toBe("collect");
+    expect(known.lines.join(" ")).toMatch(/You are the first heir of this vault's plan\. The plan keeps you private, and the salt you entered fits\./);
+
+    // the right wallet with another salt, and another wallet with the right salt, are nobody
+    for (const w of [situationWords(released(now, done), first, otherSalt), situationWords(released(now, done), stranger, salt)]) {
+      expect(w.next).toBe("nothing");
+      expect(w.lines.join(" ")).toMatch(/This wallet and this salt do not fit the heir this plan keeps private/);
+    }
+    // the heir named openly in the same plan needs no salt, and is not told they are private
+    const openly = situationWords(released(now, done), second);
+    expect(openly.lines.join(" ")).toMatch(/You are the second heir of this vault's plan\./);
+    expect(openly.lines.join(" ")).not.toMatch(/keeps you private/);
+    // before the release a private heir is told their place the same way
+    expect(situationWords(open(state(), T0 + 10n * DAY, { plan: { address: planAt, account: account({ terms: privately }), lamports: 2_000_000 } }), first, salt).lines.join(" ")).toMatch(/keeps you private/);
+
+    // a private second heir waits out the delay like any other, and is told when it ends
+    const second_: Terms = { ...terms, contingent: hashedHeir(salt, second) };
+    const early = situationWords(released(now, { terms: second_, activated: true, activatedTs: now - DAY, contingentClockTs: now - DAY }), second, salt);
+    expect(early.lines.join(" ")).toMatch(/You are the second heir of this vault's plan\. The plan keeps you private/);
+    expect(early.lines.join(" ")).toMatch(/As the second heir you may claim from/);
   });
 
   it("warns about an arrangement that cannot pay out, and then offers no release", () => {
@@ -119,7 +155,8 @@ describe("what came of it", () => {
     expect(verdictWords({ kind: "plan_for_another_vault", plan: planAt }, now)).toMatch(/another vault/);
     expect(verdictWords({ kind: "not_activated" }, now)).toMatch(/Try again/);
     expect(verdictWords({ kind: "not_an_heir", hashedHeirs: false, saltGiven: false }, now)).toMatch(/not an heir/);
-    expect(verdictWords({ kind: "not_an_heir", hashedHeirs: true, saltGiven: false }, now)).toMatch(/command-line tool/);
+    expect(verdictWords({ kind: "not_an_heir", hashedHeirs: true, saltGiven: false }, now)).toMatch(/enter the salt printed on your kit/);
+    expect(verdictWords({ kind: "not_an_heir", hashedHeirs: true, saltGiven: true }, now)).toMatch(/this salt do not fit .* Nothing was sent/);
     expect(verdictWords({ kind: "contingent_too_early", opensAt: now + 3n * DAY }, now)).toMatch(/in 3 days/);
   });
 

@@ -77,6 +77,13 @@ describe("a kit is checked against the terms before it is printed", () => {
     expect(() => renderKit(input({ terms: undefined as never, claim: contingent }))).toThrow(/not this heir's address/);
     const { terms: _terms, ...direct } = input({ claim: primary });
     expect(() => renderKit({ ...direct, salt })).toThrow(/straight to an address/);
+    // the private heir's salt, given for the kit of the heir the same plan names openly: it would print
+    // that salt, and a fingerprint the plan does not hold, on the wrong person's page
+    const mixed: Terms = { vault, primary: { kind: "address", address: primary }, contingent: hashedHeir(salt, contingent), contingentDelaySecs: 365n * DAY };
+    expect(() => renderKit(input({ terms: mixed, claim: planAddress(mixed), heirAddress: primary, salt }))).toThrow(/they have no salt/);
+    expect(renderKit(input({ terms: mixed, claim: planAddress(mixed), heirAddress: primary }))).not.toContain("Your salt");
+    expect(renderKit(input({ terms: mixed, claim: planAddress(mixed), heirAddress: contingent, salt }))).toContain("Your salt");
+    expect(() => renderKit(input({ salt }))).toThrow(/they have no salt/);
   });
 });
 
@@ -97,6 +104,9 @@ describe("the page", () => {
     expect(html).toContain("abc1234");
     expect(html).not.toContain("Your salt");
     expect(html).not.toContain("Test kit");
+    // a named heir may be left a letter: how to read it, and what one never asks for
+    expect(html).toContain("node src/cli.ts letter-open THE-LETTER-FILE --keypair YOUR-KEY-FILE");
+    expect(html).toContain("never asks you for money, a key or a seed phrase");
   });
 
   it("tells a contingent heir how long they wait", () => {
@@ -112,6 +122,13 @@ describe("the page", () => {
     expect(html).toContain(`--salt ${text}`);
     expect(html).toContain("not published");
     expect(html.match(/<svg /g)!.length).toBe(3); // vault, plan, salt
+    // the fingerprint the owner's offline signer shows for this heir, to compare character for character
+    if (hashed.primary.kind !== "hashed") throw new Error("the test's terms changed");
+    const fingerprint = Buffer.from(hashed.primary.commitment).toString("hex");
+    expect(html).toContain("Your fingerprint");
+    expect(html).toContain(fingerprint.match(/.{8}/g)!.join(" "));
+    expect(renderKit(input())).not.toContain("Your fingerprint");
+    expect(html).not.toContain("letter-open"); // nobody can write to an heir whose address is not known
   });
 
   it("for a vault that releases straight to the heir, there is no plan to show", () => {
@@ -121,6 +138,7 @@ describe("the page", () => {
     expect(html).not.toContain("Plan address");
     expect(html).not.toContain("Claim program");
     expect(html.match(/<svg /g)!.length).toBe(1);
+    expect(html).not.toContain("letter-open"); // a letter is written under a plan
   });
 
   it("marks a test build as one", () => {

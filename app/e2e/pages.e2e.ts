@@ -8,6 +8,9 @@
  *   owner   creates a vault; names an heir; pastes back the heir's acceptance; creates the plan;
  *           makes a check-in key in the browser; signs the plan on this device
  *   heir    opens the owner's link, signs the sentence, sends the line back
+ *   letter  the heir makes a reading key for the owner's wallet; the owner writes a letter, is
+ *           warned about what must not be in one, seals it and saves the file; the heir opens it,
+ *           a changed copy is refused, and it opens for nobody else
  *   signer  the offline signer shows the heir by name for the real request, refuses a forged one,
  *           and its signature for a changed plan is accepted by the chain
  *   owner   checks in with the browser's key
@@ -18,7 +21,7 @@
  * the pages the Heir program's id, message and encoder, and that the three pages work together.
  */
 import { execFileSync } from "node:child_process";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { type AddressInfo } from "node:net";
 import { extname, join, normalize } from "node:path";
@@ -182,6 +185,66 @@ describe("the pages, in a browser, on a local validator", () => {
     await owner.waitForSelector(".result");
     expect(await owner.locator(".result").innerText()).toMatch(/SetSuccession · key 0 spent/);
     await owner.waitForSelector("text=A plan is armed.");
+
+    // ── a letter for the heir: a reading key, a sealed and signed file, and who can open it ──
+    await owner.waitForSelector("#llink");
+    const keyLink = (await owner.locator("#llink").innerText()).trim();
+    expect(keyLink).toBe(`${base}/heir/claim.html#letter=${plan}&from=${ownerWallet.toBase58()}`);
+    await heir.goto(keyLink);
+    await heir.waitForSelector("#lkmake");
+    expect(await heir.locator("#lkpanel").innerText()).toContain(ownerWallet.toBase58());
+    await heir.click("#lkmake");
+    await heir.waitForSelector("#lkline");
+    const readingKey = await heir.inputValue("#lkline");
+    expect(JSON.parse(readingKey)).toMatchObject({ v: 1, plan, writer: ownerWallet.toBase58(), heir: heirWallet.toBase58() });
+
+    const LETTER = "The deeds are with the notary on Elm Street.\nMy seed phrase is in the safe at home; Sam has the code.\n<b>Call Sam first.</b>";
+    const swapped = JSON.parse(readingKey); swapped.key = Buffer.from(new Uint8Array(32).fill(9)).toString("base64"); // somebody else's key, put in on the way
+    await owner.fill("#hletter textarea[data-reader]", JSON.stringify(swapped));
+    await owner.fill("#ltext", LETTER);
+    await owner.click("#lseal");
+    await owner.waitForSelector("#lerr:not(.hidden)");
+    expect(await owner.locator("#lerr").innerText()).toMatch(/first heir's reading key: What was signed is not the sentence that names this reading key/);
+    // the letter's words are not offered to a spelling service, which in some browsers is a server
+    expect(await owner.getAttribute("#ltext", "spellcheck")).toBe("false");
+    expect(await owner.getAttribute("#ltext", "autocomplete")).toBe("off");
+    await owner.fill("#hletter textarea[data-reader]", readingKey);
+    await owner.click("#lseal"); // the letter mentions a seed phrase: the owner is told, and nothing is sealed yet
+    await owner.waitForSelector("#lwarn:not(.hidden)");
+    expect(await owner.locator("#lwarn").innerText()).toMatch(/Say where such a thing is kept, never what it is/);
+    expect(await owner.locator("#lsealed").count()).toBe(0);
+    await owner.click("#lseal");
+    await owner.waitForSelector("#lsealed");
+    const [download] = await Promise.all([owner.waitForEvent("download"), owner.click("#lsave")]);
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^lamport-heir-letter-${plan.slice(0, 8)}-\\d{4}-\\d{2}-\\d{2}\\.json$`));
+    const sealedFile = readFileSync(await download.path(), "utf8");
+    expect(sealedFile).toBe(await owner.inputValue("#lfile"));
+    for (const word of ["notary", "Elm Street", "safe at home", "Sam"]) expect(sealedFile).not.toContain(word);
+
+    await heir.click("#navletter");
+    await heir.waitForSelector("#lcheck");
+    expect(await heir.locator("#lkpanel").count()).toBe(0);
+    const changed = JSON.parse(sealedFile); const inside = JSON.parse(changed.content); inside.sealedAt = "2031-01-01"; changed.content = JSON.stringify(inside);
+    await heir.fill("#lpaste", JSON.stringify(changed));
+    await heir.click("#lcheck");
+    await heir.waitForSelector("#lrerr:not(.hidden)");
+    expect(await heir.locator("#lrerr").innerText()).toMatch(/not signed by the wallet it names as its writer/);
+    expect(await heir.locator("#lopen").count()).toBe(0);
+    await heir.setInputFiles("#lfilein", { name: download.suggestedFilename(), mimeType: "application/json", buffer: Buffer.from(sealedFile) });
+    await heir.waitForSelector("#lopen");
+    expect(await heir.locator("#lwriter").innerText()).toBe(ownerWallet.toBase58());
+    expect(await heir.locator("#lcaveat").innerText()).toMatch(/It is the owner's only if it opens/);
+    await heir.click("#lopen");
+    await heir.waitForSelector("#lwords");
+    expect(await heir.locator("#lwords").evaluate((n) => n.textContent)).toBe(LETTER);
+    expect(await heir.locator("#lwords b").count()).toBe(0); // the letter's words are text on the page, never markup
+
+    await contact.click("#sletter"); // from where a vault stands: the way in on a phone, where the top navigation is not shown
+    await contact.waitForSelector("#lcheck");
+    await contact.fill("#lpaste", sealedFile);
+    await contact.click("#lcheck");
+    await contact.waitForSelector("#lnotyours");
+    expect(await contact.locator("#lopen").count()).toBe(0);
 
     // ── the offline signer: who inherits, a forged request, and a signature the chain takes ──
     await owner.click('.switch button[data-m="cold"]');
