@@ -72,8 +72,10 @@ The order is fixed by how plans work, since other heirs are another plan at anot
 4. **The plan's address goes into the form the owner signs**, with the terms, so that the signer
    can make the check above.
 
-The page handles heirs named by address. Heirs kept private (a salted hash in the plan) need
-their salt on their kit and nowhere else, and are left to the command-line tools for now.
+The owner's page names heirs by address. Heirs kept private (a salted hash in the plan) need
+their salt on their kit and nowhere else; making such a plan is left to the command-line tools
+for now. Their kit prints the fingerprint the signer shows, and they can collect on the heirs'
+page (below).
 
 ## The check-in key
 
@@ -97,7 +99,11 @@ nothing but the Solana endpoint. What it does on chain is what `tools/` does, by
 - **releasing and collecting**: every step that is still undone, then the withdrawal, each step
   listed with its transaction or with the reason a token could not be moved;
 - **for the owner's trusted contact**, whose wallet is neither heir's: the one thing their key can
-  do, pushing the deadline back by 90 days, once.
+  do, pushing the deadline back by 90 days, once;
+- **for an heir kept private**: a plan that names an heir by a salted hash shows a wallet it does
+  not name openly a field for the salt on their kit. With the right salt the page tells them
+  their place and collects for them; with a wrong one, or the wrong wallet, it says that the two
+  do not fit and sends nothing. A salt is typed, kept while the page is open, and never stored.
 
 The sentences are in `app/src/heir-words.ts`, apart from the page, and tested as text.
 
@@ -162,7 +168,7 @@ wallet the heir made their key for.
 |---|---|---|
 | terms in a request, and the check the signer makes | `app/test/terms.test.ts` | 9 |
 | the acceptance: format, envelope rule, refusals | `app/test/acceptance.test.ts` | 4 |
-| what the heirs' page says, phase by phase, and to the trusted contact | `app/test/heir-words.test.ts` | 14 |
+| what the heirs' page says, phase by phase, to the trusted contact, and to an heir kept private | `app/test/heir-words.test.ts` | 15 |
 | the vault's own request code with this repository's module in its seam, as the signer is built | `app/test/signer-seam.test.ts` | 4 |
 | the link that asks an heir for a reading key | `app/test/letter-view.test.ts` | 2 |
 | the letter itself: keys, the file, forgeries, refusals | `tools/test/letter.test.ts`, `tools/test/cli.test.ts` | 18 + 2 |
@@ -197,6 +203,9 @@ bound the vault's own program id; the chain refused it).
 - Reminders are not wired into the page (the service has no public address yet).
 - The family letter is a file the owner hands over. Nothing stores it for them or delivers it at
   the release, and the owner cannot open a sealed one again.
-- Heirs kept private, in the page.
+- Naming an heir privately from the owner's page. An heir kept private can collect on the heirs'
+  page with their salt, but making such a plan, and the kit that carries the salt, is the
+  command-line tool's. The salt field is tested as words and through the claim code on a
+  validator (`tools/e2e/release.e2e.ts`, vault C), not by the browser test.
 - Real wallets in the browser test: it uses the test key the pages offer on localhost. Wallet
   Standard wallets and hardware wallets were not driven by a machine or by hand.

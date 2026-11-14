@@ -235,7 +235,7 @@ describe("the pages, in a browser, on a local validator", () => {
     expect(await heir.locator("#lwords").evaluate((n) => n.textContent)).toBe(LETTER);
     expect(await heir.locator("#lwords b").count()).toBe(0); // the letter's words are text on the page, never markup
 
-    await contact.goto(`${base}/heir/claim.html#letter`);
+    await contact.click("#sletter"); // from where a vault stands: the way in on a phone, where the top navigation is not shown
     await contact.waitForSelector("#lcheck");
     await contact.fill("#lpaste", sealedFile);
     await contact.click("#lcheck");

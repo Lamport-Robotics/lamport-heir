@@ -18,18 +18,21 @@ import { $, CLUSTER, copy, el, isPubkey, short, txLink } from "../../vendor/lamp
 import { rpc } from "../../vendor/lamport-vault/web/src/rpc.ts";
 import { contactExtendInstruction, successionLimits } from "@lamport-robotics/vault";
 import { send, type Chain } from "../../tools/src/chain.ts";
-import { acceptanceMessage, checkTerms, planAddress, type Terms } from "../../tools/src/claim.ts";
+import { acceptanceMessage, checkTerms, heirMatches, planAddress, type Terms } from "../../tools/src/claim.ts";
 import { claim } from "../../tools/src/claiming.ts";
 import { inspect, start, type Situation, type Step } from "../../tools/src/release.ts";
+import { parseSalt } from "../../tools/src/salt.ts";
 import { acceptanceBytes, isAcceptanceOf, writeAcceptance } from "./acceptance.ts";
 import { connect, listWallets, localTestWallet, onWalletsChange, type HeirWallet } from "./heir-wallet.ts";
-import { contactWords, durationInDays, placeInTerms, situationWords, stepWords, verdictWords } from "./heir-words.ts";
+import { contactWords, durationInDays, keepsAnHeirPrivate, placeInTerms, situationWords, stepWords, verdictWords } from "./heir-words.ts";
 import { letterView } from "./letter-view.ts";
 import { buildPrograms, termsFromJson } from "./terms.ts";
 
 const chain = rpc as unknown as Chain;
 const programs = buildPrograms();
 let wallet: HeirWallet | null = null;
+/** salts typed from a kit, by plan, for as long as the page is open. a salt is not a key, and it is still never stored */
+const salts = new Map<string, Uint8Array>();
 
 const app = $("#app");
 app.className = "shell";
@@ -150,7 +153,9 @@ function statusView(address: string): HTMLElement {
     el("h2", { style: "margin-top:14px" }, "See where a vault stands, and collect what was left to you."),
     el("p", { style: "max-width:52ch" }, "Enter the vault's address, or the plan's. Both are on your kit. Looking needs no wallet and changes nothing."),
     el("label", { class: "field", style: "max-width:560px" }, el("span", {}, "Vault or plan address"), input),
-    el("div", { class: "actions" }, go));
+    el("div", { class: "actions" }, go),
+    // the top navigation is not shown on a phone: the letter has to be reachable from here
+    el("p", { class: "quiet", style: "margin-top:30px;max-width:52ch" }, "If the owner left you a letter, or asked you for a key to write you one: ", el("a", { class: "link", href: "#letter", id: "sletter" }, "the family letter"), "."));
   const panel = el("div", { class: "panel", id: "spanel" }, el("p", { class: "quiet" }, address ? "Reading the chain…" : "Nothing looked up yet."));
   const open = () => { const v = input.value.trim(); if (isPubkey(v)) { if (location.hash.slice(1) === v) route(); else location.hash = v; } else input.focus(); };
   go.addEventListener("click", open);
@@ -163,7 +168,8 @@ async function paintSituation(panel: HTMLElement, address: PublicKey) {
   let s: Situation;
   try { s = await inspect(chain, address); }
   catch (e) { panel.replaceChildren(el("div", { class: "eyebrow" }, "Not found"), el("p", { class: "quiet" }, `That address is not a Lamport Vault with inheritance, nor a plan of one, or the network did not answer: ${String((e as Error).message ?? e)}`)); return; }
-  const w = situationWords(s, wallet?.publicKey);
+  const salt = s.plan ? salts.get(s.plan.address.toBase58()) : undefined;
+  const w = situationWords(s, wallet?.publicKey, salt);
   const steps = el("ul", { class: "steps hidden", id: "ssteps" });
   const err = el("div", { class: "err hidden" }), done = el("div", { class: "ok hidden", id: "sdone" });
   const acts = el("div", { class: "actions" });
@@ -174,6 +180,32 @@ async function paintSituation(panel: HTMLElement, address: PublicKey) {
     steps.classList.remove("hidden");
     for (const st of list) { const t = stepWords(st); const li = el("li", { class: t.outcome === "done" ? "done" : "" }, el("span", {}, t.name)); li.append(t.outcome === "done" ? txLink(t.detail, 5) : el("span", { class: "quiet", style: "margin-left:auto;font-size:12px" }, t.detail)); steps.append(li); }
   };
+  // a plan that keeps an heir private: a wallet it does not name openly may be that heir's, and only their salt can tell
+  const terms = s.plan?.account.terms;
+  if (wallet && s.plan && terms && keepsAnHeirPrivate(terms) && !heirMatches(terms.primary, wallet.publicKey) && !heirMatches(terms.contingent, wallet.publicKey)) {
+    const key = s.plan.address.toBase58();
+    const field = el("input", { class: "mono", id: "ssalt", autocomplete: "off", spellcheck: "false" });
+    const use = el("button", { class: "btn sm", id: "ssaltgo" }, "Use this salt");
+    const bad = el("div", { class: "err hidden", id: "ssalterr" });
+    const box = el("div", { class: "notice", id: "ssaltbox", style: "margin-top:16px" });
+    if (salt) {
+      const drop = el("button", { class: "link quiet", id: "ssaltdrop" }, "Forget it");
+      drop.addEventListener("click", () => { salts.delete(key); void paintSituation(panel, address); });
+      box.append(el("div", {}, "A salt is in use for this plan, for as long as this page stays open. ", drop));
+    } else {
+      box.append(el("label", { class: "field", style: "margin:0 0 10px" }, el("span", {}, "Your salt · the 64 characters under \"Your salt\" on your kit, with or without the four after the dash"), field),
+        el("div", { class: "quiet", style: "font-size:12.5px;margin-bottom:10px" }, "A salt is not a seed phrase and not a key: it moves nothing, and only shows the plan that this wallet is the heir it keeps private."),
+        el("div", { class: "actions" }, use), bad);
+      const take = () => {
+        bad.classList.add("hidden");
+        try { salts.set(key, parseSalt(field.value)); void paintSituation(panel, address); }
+        catch (e) { bad.textContent = `That is not a salt as a kit prints it: ${String((e as Error).message ?? e)}.`; bad.classList.remove("hidden"); }
+      };
+      use.addEventListener("click", take);
+      field.addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter") take(); });
+    }
+    acts.before(box);
+  }
   // the owner's trusted contact is not an heir, and has one button of their own
   const contact = contactWords(s, wallet?.publicKey, successionLimits({ daySecs: s.programs.daySecs }).contactExtensionSecs / s.programs.daySecs);
   if (contact) {
@@ -213,7 +245,7 @@ async function paintSituation(panel: HTMLElement, address: PublicKey) {
     err.classList.add("hidden"); done.classList.add("hidden"); steps.innerHTML = "";
     b.setAttribute("disabled", ""); b.classList.add("spin");
     try {
-      const r = await claim(chain, wallet!, address);
+      const r = await claim(chain, wallet!, address, salt ? { salt } : {});
       show(r.steps);
       done.textContent = verdictWords(r.verdict, r.situation.now, programs.daySecs); done.classList.remove("hidden");
     } catch (e) { report(e); }

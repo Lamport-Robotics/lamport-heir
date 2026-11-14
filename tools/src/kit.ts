@@ -9,11 +9,13 @@
  * `renderKit` checks the page against the terms before it prints anything, because a kit with a
  * wrong address or a wrong salt is worse than no kit: the heir learns it only when they claim.
  */
-import { sha256 } from "@noble/hashes/sha2.js";
 import { type PublicKey } from "@solana/web3.js";
 import QRCode from "qrcode";
 import { heirCommitment, heirMatches, planAddress, type Terms } from "./claim.ts";
 import { type Programs } from "./programs.ts";
+import { formatSalt } from "./salt.ts";
+
+export { formatSalt, parseSalt } from "./salt.ts";
 
 export interface KitInput {
   /** Who the page is for, in the owner's words. Printed as given. */
@@ -41,26 +43,6 @@ export interface KitInput {
 }
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-
-/**
- * A salt as the kit prints it: 64 hex digits, a dash, and 4 check digits (the first two bytes of
- * its SHA-256). The check lets the claim tool catch a mistyped salt before it looks like "you are
- * not an heir".
- */
-export function formatSalt(salt: Uint8Array): string {
-  if (salt.length !== 32) throw new RangeError(`a salt is 32 bytes, got ${salt.length}`);
-  return `${hex(salt)}-${hex(sha256(salt).slice(0, 2))}`;
-}
-
-/** Reads a salt as printed by {@link formatSalt}, with or without spaces and the check digits. */
-export function parseSalt(text: string): Uint8Array {
-  const clean = text.replace(/\s+/g, "").toLowerCase();
-  const m = /^([0-9a-f]{64})(?:-([0-9a-f]{4}))?$/.exec(clean);
-  if (!m) throw new Error("a salt is 64 hex digits, optionally followed by a dash and 4 check digits");
-  const salt = Uint8Array.from(m[1]!.match(/../g)!, (b) => parseInt(b, 16));
-  if (m[2] !== undefined && m[2] !== hex(sha256(salt).slice(0, 2))) throw new Error("the salt's check digits do not match: one of its digits is mistyped");
-  return salt;
-}
 
 function esc(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");

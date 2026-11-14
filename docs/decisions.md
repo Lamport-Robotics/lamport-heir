@@ -194,9 +194,10 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   proofs" and leaves the route open. No server sits between owner and heir: the owner sends a
   link, the heir's page signs, the heir sends one line back by any means, and the owner's page and
   then the claim program check it.
-- **Private heirs stay with the command-line tools for now.** A hashed heir's salt exists only on
-  their kit. A page that makes salts has to make sure the kit is printed before the plan is armed,
-  and that flow is not built.
+- **Naming a private heir stays with the command-line tools for now.** A hashed heir's salt
+  exists only on their kit. A page that makes salts has to make sure the kit is printed before
+  the plan is armed, and that flow is not built. Collecting is in the page: an heir kept private
+  types the salt from their kit, which is not a key and is never stored.
 - **The tools sign with a wallet as well as with a key file**, so the heirs' page runs the same
   `start` and `claim` as the command-line tool rather than a second implementation.
 - **The check-in key pays its own fee.** The spec lets Lamport pay the fee of a check-in. A fee

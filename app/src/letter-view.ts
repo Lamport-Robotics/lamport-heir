@@ -135,7 +135,8 @@ export function letterView(arg: string, env: LetterEnv): HTMLElement {
     el("h2", { style: "margin-top:14px" }, "A letter from the owner, for their heirs."),
     el("p", { style: "max-width:52ch" }, "The owner of a vault can leave their heirs a letter: where other accounts are, who to call, where the papers are. It is encrypted so that only the heirs can read it, and signed by the owner's wallet so that nobody else can write one in their name."),
     el("p", { class: "quiet", style: "max-width:52ch" }, NEVER),
-    el("p", { class: "quiet", style: "max-width:52ch" }, "Nobody from Lamport will ever contact you about a letter, and this page has no field for a seed phrase."));
+    el("p", { class: "quiet", style: "max-width:52ch" }, "Nobody from Lamport will ever contact you about a letter, and this page has no field for a seed phrase."),
+    el("p", { class: "quiet", style: "margin-top:30px;max-width:52ch" }, el("a", { class: "link", href: "#", id: "lback" }, "See where a vault stands"), ", and collect what was left to you."));
   const right = el("div", {});
   if (arg !== "" && !invitation) right.append(el("div", { class: "panel" }, el("div", { class: "eyebrow" }, "This link is damaged"), el("p", { class: "quiet" }, "It should name a plan and the owner's wallet, and it does not. Ask the person who sent it to copy it again, whole.")));
   if (invitation) right.append(keyPanel(env, invitation.plan, invitation.writer));
