@@ -1,11 +1,12 @@
 # For an auditor
 
-**Draft.** Milestone 6 ends with a frozen commit; this is not it yet. Milestone 4 (the app and the
-reminders) is unfinished, and nothing is deployed. What is below describes the code as merged in
-milestones 0 to 3, which is the part that moves funds.
+**Draft.** Milestone 6 ends with a frozen commit; this is not it yet. Two things stand between
+this and a frozen commit: milestone 4's gate is a cycle on devnet, which has run on a local
+validator only ([`../devnet.md`](../devnet.md)), and nothing is deployed anywhere.
 
 Nothing here has been audited. Two reviewers who had not seen the code read both programs before
-they were merged (their findings are at the end); that is a review, not an audit.
+they were merged (their findings are at the end); that is a review, not an audit. **The pages and
+the offline signer's Heir build have been reviewed by nobody but their author.**
 
 ## What moves funds
 
@@ -26,6 +27,19 @@ The two programs meet at one point. When a vault releases, it writes an 81-byte 
 the address it released to. The claim program believes a tombstone only from the vault program
 whose id is compiled into it, and only when it names that plan.
 
+## What decides what the owner signs
+
+One more piece moves no funds and still belongs in scope: **the offline signer**, the single file
+an owner types their 24 words into. Whatever it shows is what the owner believes they are
+signing. Heir does not change the vault's signer. It builds a second one from the same source
+(lamport-vault `docs/SUCCESSION.md`, section 9; [`../app.md`](../app.md)):
+
+| | source | lines |
+|---|---|---|
+| the vault's signer, unchanged | lamport-vault `web/src/signer.ts` | about 20 lines added; every one that runs is behind the build constant and compiled out of the vault's own build |
+| what a Heir build adds to it | lamport-vault `web/src/heir-plan.ts`, `heir-sdk.ts` | about 140 |
+| what this repository adds | `app/src/terms.ts`, through `app/src/ext-signer.ts` | about 150 |
+
 ## Build and hashes
 
 ```sh
@@ -39,8 +53,11 @@ node tools/scripts/build-programs.mjs     # needs Agave 2.3.x; platform-tools v1
 | lamport-vault with `succession`, same image | printed by the `succession build` job of lamport-vault's `succession.yml` for each commit |
 | `heir-claim` | printed by this repository's `both programs in litesvm` job |
 
-Program ids are placeholders with no private key (`docs/program-ids.md`). Real ids come with the
-first deployment and change three constants.
+| the pages and the Heir signer (`app/dist/heir/`) | printed by this repository's `app` job; the signer carries its commit |
+| the vault's own page and signer (lamport-vault `web/dist/`) | byte for byte what they were before the Heir build existed; the `web` job in lamport-vault checks that no Heir code is in them |
+
+Program ids have deployment keypairs, kept by the project owner outside every repository
+([`../program-ids.md`](../program-ids.md)). Nothing is deployed at them yet.
 
 ## What must hold, and what holds it
 
@@ -76,6 +93,25 @@ removes or weakens that rule and requires a test to notice (`tests/mutants/` in 
 | C8 | A proof of control is for one plan and cannot be replayed for another | the signed text names the plan's address; `a_signed_message_must_be_by_the_heir_over_this_plan`; `an_ed25519_entry_that_points_at_another_instruction_proves_nothing` |
 | C9 | After a vault has released to a plan's address, that plan can still be created, by anyone, and only that plan | `a_plan_can_still_be_created_after_its_vault_released_to_it`; `a_released_vault_lets_only_the_plan_it_named_be_created`; `release.rs`; mutants |
 
+### The signer and the pages
+
+| # | property | held by |
+|---|---|---|
+| S1 | The vault's own page and signer are unchanged | lamport-vault: `web/dist/` compared file by file before and after; the `web` job fails if the Heir build's text is anywhere in `web/dist/`, or `SetSuccession` or the Heir program id in the vault's signer |
+| S2 | A Heir build signs for the Heir-enabled program and no other | lamport-vault `web/test/heir.test.ts`: `a signature made in a Heir build is for the Heir-enabled program`; `a Heir build's SDK names the Heir-enabled program, and nothing else changes` |
+| S3 | What is signed is the request that was shown: the same five fields, encoded as the program decodes them | `requests become the bytes and the messages of kat/succession_encoding.json` (the vectors the program's own tests read) |
+| S4 | A plan the program would refuse is refused before it costs a one-time key | `a plan the program would refuse is refused before it costs a one-time key`; `removing a plan has one spelling` |
+| S5 | When a request names heirs, the signer derives the plan's address from them and refuses anything short of an exact match | `app/test/terms.test.ts`: `refuses a claim address the named heirs do not give`, `refuses a plan made for another vault`, `refuses terms the claim program would refuse, and terms it cannot read`, `are read strictly` |
+| S6 | If the signer cannot show the plan, it shows nothing and signs nothing | `showPlan` throws and the caller clears the request (lamport-vault `web/src/signer.ts`, after the `try` block); read, not tested |
+| S7 | The Heir signer holds no code that talks to a network | `app/build.mjs` fails the build otherwise; the page's CSP is `connect-src 'none'` |
+| S8 | The page creates a plan only after every heir named by address has signed for it | `app/test/acceptance.test.ts`; the claim program checks the same signatures again (C7) |
+| S9 | The page refuses a claim address that nothing exists at and no key signs for, a program, a token account, and a vault whose plan names this one | `claimProblemOnChain` in lamport-vault `web/src/heir-page.ts`; tried by hand, **no automated test** |
+| S10 | The heirs' page asks for no key and no seed phrase | by reading: `app/claim.html` and `app/src/claim-page.ts` have one text field, for an address |
+
+The terms in a request (S5) are not part of what is signed: the signature covers the claim
+address, which is all the vault program knows. The terms are how the signer explains that
+address, and it accepts them only when they hash to it.
+
 ### Off chain
 
 | # | property | held by |
@@ -86,6 +122,10 @@ removes or weakens that rule and requires a test to notice (`tests/mutants/` in 
 | O4 | The reminder service holds no key and sends no transaction | `says nothing while nothing is due, and sends nothing to the chain, ever` |
 | O5 | No reminder contains a link or asks for a secret | `never contains a link, and never asks for a secret`, for every kind of notice and both audiences |
 | O6 | The Pincer1 link cannot clear or release the robot's switch | `has no way to clear or release the switch` |
+| O7 | Email is plain text to exactly one address, and no error repeats the mail account's password | `tools/test/email.test.ts`, against a mail server on the test machine |
+| O8 | The service posts notifications only to browser makers' push services | `refuses an endpoint that is not a browser's push service: the service posts to it`; `never posts for a subscription it refuses` |
+| O9 | The service's own keys are written to a file only its user can read and are never shown | `makes its keys into a file only its user can read, and shows no private half` |
+| O10 | The check-in key kept in a browser cannot be read out | made non-extractable (`tools/src/checkin.ts`); `app/src/keystore.ts` refuses to store one that is not |
 
 ## Known limits
 
@@ -98,7 +138,8 @@ Stated plainly, so that nobody finds them by surprise.
 2. **A ring of three or more vaults naming each other** would trap a release among their
    tombstones. The program refuses a ring of two.
 3. **Tokens of a mint with a Token-2022 transfer hook are not moved.** They are reported and stay
-   where they are.
+   where they are. A fix for the vault's own transfers is being prepared in lamport-vault, as a
+   change to the vault program in its own right.
 4. **Non-transferable, frozen and paused tokens** stay until their issuer lets them move, or for
    ever. They hold nothing else back.
 5. **The acceptance message is accepted inside an off-chain message envelope that is not parsed**,
@@ -108,6 +149,15 @@ Stated plainly, so that nobody finds them by surprise.
 7. **Whoever holds an heir's key at the time receives the funds.**
 8. **A check-in key that is stolen can delay a release by up to two years** past the owner's last
    vault signature, and a contact's key once by 90 days. That is their whole power.
+9. **The pages have no automated browser test.** They were tried by hand, end to end, against a
+   local validator ([`../app.md`](../app.md)); their logic is tested without a browser.
+10. **The page names heirs by address only.** Heirs kept private (a salted hash) go through the
+    command-line tools.
+11. **Nobody can sign up for reminders from the page.** Whoever runs the service adds vaults by
+    hand; email has no sending account yet ([`../reminders.md`](../reminders.md)).
+12. **Whoever controls the page an owner uses can lie on that page.** The offline signer is the
+    defence, and it covers what is signed: the claim address and who is behind it, the durations,
+    the two keys. It cannot cover what the page says afterwards about the state of the chain.
 
 ## Where the spec was not followed
 
@@ -133,9 +183,12 @@ before the merge:
 cargo test --workspace                                   # 23
 (cd tests/svm && cargo test)                             # 49, both programs in LiteSVM
 python3 tests/mutants/run.py                             # 23 mutants, after a green baseline
-(cd tools && npm test && npm run e2e)                    # unit tests; then a local validator, about 3 minutes
+(cd tools && npm test)                                   # 142
+(cd tools && npm run build:programs && npm run e2e)      # a local validator: four releases, the whole cycle, the Pincer1 link
+(cd app && npm test && npm run build)                    # 25; then app/dist/heir/, with the signer's checks
 ```
 
 and in lamport-vault: `cargo test --workspace --features lamport-lms/sign,lamport-vault/succession`,
 `scripts/anchor-succession.sh`, `(cd tests/svm && cargo test --features succession)`,
-`python3 tests/mutants/succession.py`, `(cd fuzz && cargo +nightly fuzz run --features succession succession_clock)`.
+`python3 tests/mutants/succession.py`, `(cd fuzz && cargo +nightly fuzz run --features succession succession_clock)`,
+and for the page and the signer `(cd web && npm test && npm run build && npm run build:heir)`.
