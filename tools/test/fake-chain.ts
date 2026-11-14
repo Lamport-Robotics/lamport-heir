@@ -77,8 +77,14 @@ export class FakeChain implements Chain {
     return out;
   }
 
-  async getTokenAccountsByOwner(): Promise<{ value: { pubkey: PublicKey; account: AccountInfo<Buffer> }[] }> {
-    return { value: [] };
+  /** Token accounts are found the way an RPC node finds them: by the owner field inside the account. */
+  async getTokenAccountsByOwner(owner?: PublicKey, filter?: { programId: PublicKey }): Promise<{ value: { pubkey: PublicKey; account: AccountInfo<Buffer> }[] }> {
+    const value: { pubkey: PublicKey; account: AccountInfo<Buffer> }[] = [];
+    if (!owner || !filter) return { value };
+    for (const [key, a] of this.accounts) {
+      if (a.owner.equals(filter.programId) && a.data.length >= 165 && Buffer.from(a.data.subarray(32, 64)).equals(owner.toBuffer())) value.push({ pubkey: new PublicKey(key), account: this.info(a) });
+    }
+    return { value };
   }
 
   async getLatestBlockhash() {

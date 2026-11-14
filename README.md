@@ -28,6 +28,7 @@ repository is audited.
 - The reminder service: [`docs/reminders.md`](docs/reminders.md)
 - Devnet: what is deployed (nothing yet), how to deploy, and the cycle that is milestone 4's
   gate: [`docs/devnet.md`](docs/devnet.md)
+- The Pincer1 link: [`docs/pincer-link.md`](docs/pincer-link.md)
 - The vault side lives in lamport-vault as the `succession` cargo feature, merged in
   [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5); its reference is
   [`docs/SUCCESSION.md`](https://github.com/Lamport-Robotics/lamport-vault/blob/main/docs/SUCCESSION.md)
@@ -40,6 +41,7 @@ app/                  what is served under /heir/: the page, the cold signer, th
 tests/svm             the built programs in LiteSVM, with a clock the tests can move
 kat/                  byte layouts shared by the program and the tools
 vendor/lamport-vault  lamport-vault, pinned to one commit (a git submodule)
+vendor/pincer1        pincer1, pinned and read-only, for the tests of the Pincer1 link
 docs/                 design note, decisions, the claim program, the tools, program ids, models
 ```
 

@@ -224,6 +224,24 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   and the soonest a release could now happen. With no on-chain queue (decision 2), this alarm is
   what stands in front of a forced change.
 
+## Milestone 5, the Pincer1 link
+
+[`pincer-link.md`](pincer-link.md) describes the result. Decision 1 put the link on the robot.
+
+- **The link reads `GET /status` for the robot's wallet address.** The brief lists the switch's
+  routes, pairing and the webhook. `/status` is what a paired client already gets, it is read
+  only, and without it the link could not check that the switch's nonce account answers to the
+  robot's wallet: the first end-to-end run armed a transaction that could never have run.
+- **The link never calls `/inheritance/clear`**, though the brief allows it. Arming again replaces
+  the arrangement, with the owner's hold; nothing in Heir needs to clear one.
+- **The robot's inactivity period is the vault's window plus its waiting period, exactly.** Its
+  timer counts powered days, so it can only fire later than the vault's earliest release.
+- **The nonce account can be made elsewhere.** The daemon creates one only while its
+  `offlinePayments` setting is on; the link does not touch settings, and accepts an account the
+  owner made with the robot's wallet as its authority.
+- **Tested in process**, with the daemon's real classes and the simulator's own `tick`, since a
+  running daemon never advances the simulated clock.
+
 ## From the project owner
 
 - **2026-11-13: Heir's app is a page of the vault site, `vault.lamportrobotics.com/heir`**, not a
