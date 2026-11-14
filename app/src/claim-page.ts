@@ -21,12 +21,13 @@ import { send, type Chain } from "../../tools/src/chain.ts";
 import { acceptanceMessage, checkTerms, heirMatches, planAddress, type Terms } from "../../tools/src/claim.ts";
 import { claim } from "../../tools/src/claiming.ts";
 import { inspect, start, type Situation, type Step } from "../../tools/src/release.ts";
-import { parseSalt } from "../../tools/src/salt.ts";
+import { formatSalt, parseSalt } from "../../tools/src/salt.ts";
+import { readAcceptLink } from "./accept-link.ts";
 import { acceptanceBytes, isAcceptanceOf, writeAcceptance } from "./acceptance.ts";
 import { connect, listWallets, localTestWallet, onWalletsChange, type HeirWallet } from "./heir-wallet.ts";
 import { contactWords, durationInDays, keepsAnHeirPrivate, placeInTerms, situationWords, stepWords, verdictWords } from "./heir-words.ts";
 import { letterView } from "./letter-view.ts";
-import { buildPrograms, termsFromJson } from "./terms.ts";
+import { buildPrograms } from "./terms.ts";
 
 const chain = rpc as unknown as Chain;
 const programs = buildPrograms();
@@ -91,20 +92,19 @@ function route() {
 }
 
 // ── accepting ──
-function readLink(b64url: string): Terms {
-  const b64 = b64url.replaceAll("-", "+").replaceAll("_", "/");
-  const terms = termsFromJson(JSON.parse(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4))));
-  checkTerms(terms, programs);
-  return terms;
+function readLink(arg: string): { terms: Terms; salt?: Uint8Array } {
+  const read = readAcceptLink(arg);
+  checkTerms(read.terms, programs);
+  return read;
 }
 
 function acceptView(link: string): HTMLElement {
-  let terms: Terms;
-  try { terms = readLink(link); }
+  let terms: Terms, salt: Uint8Array | undefined;
+  try { ({ terms, salt } = readLink(link)); }
   catch { return el("div", { class: "page" }, el("div", {}, el("h2", {}, "This link is damaged"), el("p", { class: "quiet" }, "It should carry the plan you were named in, and it does not read as one. Ask the person who sent it to copy it again, whole."))); }
   const plan = planAddress(terms, programs.claim);
   const sentence = acceptanceMessage(plan);
-  const place = wallet ? placeInTerms(terms, wallet.publicKey, programs.daySecs) : null;
+  const place = wallet ? placeInTerms(terms, wallet.publicKey, programs.daySecs, salt) : null;
   const heir = (h: Terms["primary"]) => (h.kind === "address" ? h.address.toBase58() : h.kind === "hashed" ? "kept private" : "none");
   const left = el("div", {},
     el("div", { class: "eyebrow" }, "You were named an heir"),
@@ -121,6 +121,15 @@ function acceptView(link: string): HTMLElement {
   if (!wallet) { const b = el("button", { class: "btn primary" }, "Connect your wallet"); b.addEventListener("click", pickWallet); panel.append(el("div", { class: "actions" }, b)); }
   else {
     panel.append(el("p", { class: place!.named ? "ok" : "err" }, place!.text));
+    if (place!.named && place!.private && salt) {
+      // theirs to keep from this moment: the plan is not created yet, and their salt is already in their hands
+      const printed = formatSalt(salt);
+      const cps = el("button", { class: "link" }, "Copy");
+      cps.addEventListener("click", (e) => void copy(printed, e.currentTarget as HTMLButtonElement));
+      panel.append(el("div", { class: "notice warn", id: "asalt" },
+        el("div", { style: "margin-bottom:10px" }, "Your salt. Keep it where you keep private papers: when the time comes you collect with your wallet and this salt, and nobody can make it again for you. The owner will give you a printed kit that carries it too. It is not a key: nobody can take anything with it, but whoever has it can tell that you are an heir. If the owner sent you a link before with another salt, keep both: the one on your kit is the one the plan was signed with."),
+        el("div", { class: "mono", id: "asalttext", style: "font-size:12.5px;overflow-wrap:anywhere;margin-bottom:10px" }, printed), cps));
+    }
     if (place!.named) {
       const sign = el("button", { class: "btn primary", id: "asign" }, "Sign the sentence");
       const out = el("div", { id: "aout" }), err = el("div", { class: "err hidden" });
@@ -136,7 +145,9 @@ function acceptView(link: string): HTMLElement {
           const cp = el("button", { class: "link" }, "Copy");
           cp.addEventListener("click", (e) => void copy(text, e.currentTarget as HTMLButtonElement));
           out.replaceChildren(el("label", { class: "field", style: "margin-top:18px" }, el("span", {}, "Send this back to the owner"), box), el("div", { class: "actions" }, cp),
-            el("p", { class: "quiet", style: "margin-top:14px" }, "Send it any way you like; it is not a secret and it cannot be used to take anything. The owner will give you a page to keep, your kit. Nobody from Lamport will ever contact you about this or ask you for a seed phrase."));
+            el("p", { class: "quiet", style: "margin-top:14px", id: "ahow" }, place!.private
+              ? "Send it to the owner and to nobody else, the way you would send something private: it holds your address beside the plan's, so whoever sees it learns that you are an heir, which the plan itself keeps to a fingerprint. It cannot be used to take anything. The owner will give you a page to keep, your kit. Nobody from Lamport will ever contact you about this or ask you for a seed phrase."
+              : "Send it any way you like; it is not a secret and it cannot be used to take anything. The owner will give you a page to keep, your kit. Nobody from Lamport will ever contact you about this or ask you for a seed phrase."));
         } catch (e) { err.textContent = String((e as Error).message ?? e); err.classList.remove("hidden"); }
       });
     }
@@ -228,7 +239,10 @@ async function paintSituation(panel: HTMLElement, address: PublicKey) {
     acts.append(b);
     b.addEventListener("click", () => {
       const yes = el("button", { class: "btn primary sm", id: "sstartyes" }, "I believe so. Open it"), no = el("button", { class: "link quiet" }, "Cancel");
-      const box = el("div", { class: "notice warn", style: "margin-top:16px" }, el("div", { style: "margin-bottom:12px" }, "Do this only if you believe the owner has died or can no longer act. It is public: the owner and the people they chose are told, and it stays on the chain. It moves nothing, and the owner cancels it with any sign of life."), el("div", { class: "actions" }, yes, no));
+      const box = el("div", { class: "notice warn", style: "margin-top:16px" }, el("div", { style: "margin-bottom:12px" }, "Do this only if you believe the owner has died or can no longer act. It is public: the owner and the people they chose are told, and it stays on the chain. It moves nothing, and the owner cancels it with any sign of life."),
+        // whoever opens it signs for it with their wallet, on the chain, beside this vault's address
+        terms && keepsAnHeirPrivate(terms) ? el("div", { style: "margin-bottom:12px", id: "sstartprivate" }, "This plan keeps an heir private. Opening the waiting period is signed by the wallet connected here, in public, for this vault: if you are that heir, it ties your wallet to the vault a whole waiting period before you collect. Anyone may open it, from any wallet, so another wallet of yours or another person can.") : null,
+        el("div", { class: "actions" }, yes, no));
       acts.after(box);
       no.addEventListener("click", () => box.remove());
       yes.addEventListener("click", async () => {

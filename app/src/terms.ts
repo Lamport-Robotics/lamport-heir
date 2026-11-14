@@ -98,7 +98,7 @@ function durationInDays(secs: bigint, daySecs: bigint): string {
 function sayHeir(h: HeirRef): string {
   if (h.kind === "address") return h.address.toBase58();
   // the whole fingerprint: a part of it could be matched by someone choosing their own address and salt
-  if (h.kind === "hashed") return `NOT SHOWN. The plan holds only this fingerprint of an address and a salt: ${hex(h.commitment)}. This signer cannot tell whose address it is. Compare all 64 characters with the fingerprint printed on that heir's kit`;
+  if (h.kind === "hashed") return `NOT SHOWN. The plan holds only this fingerprint of an address and a salt: ${hex(h.commitment)}. This signer cannot tell whose address it is. Compare all 64 characters with the fingerprint you wrote down with that heir's salt, which is also the one on their kit`;
   return "none";
 }
 
@@ -132,7 +132,7 @@ export function explainClaim(a: { claim: string; terms?: unknown }, vault: strin
   const hidden = terms.primary.kind === "hashed" || terms.contingent.kind === "hashed";
   const rows: [string, string][] = [
     ["who that is", hidden
-      ? "a Lamport Heir plan for this vault that keeps an heir private. Its address was derived here from the terms below and matches, but this signer cannot tell you who a private heir is. Do not sign unless each fingerprint below is, character for character, the one on the kit you printed for that heir"
+      ? "a Lamport Heir plan for this vault that keeps an heir private. Its address was derived here from the terms below and matches, but this signer cannot tell you who a private heir is. Do not sign unless each fingerprint below is, character for character, the one you wrote down with that heir's salt"
       : "a Lamport Heir plan. Its address was derived here, from this vault and the heirs below, and it is the address above. The heirs cannot be changed without changing the address"],
     ["first heir", `${sayHeir(terms.primary)} · may claim as soon as the vault has been released`],
     ["second heir", terms.contingent.kind === "none" ? "none: only the first heir can ever claim" : `${sayHeir(terms.contingent)} · may claim if the first heir has not, from ${durationInDays(terms.contingentDelaySecs, programs.daySecs)} after the release`],

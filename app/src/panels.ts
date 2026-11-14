@@ -15,10 +15,11 @@ import { days, type HeirCtx } from "../../vendor/lamport-vault/web/src/heir-plan
 import { rpc } from "../../vendor/lamport-vault/web/src/rpc.ts";
 import type { Chain } from "../../tools/src/chain.ts";
 import { CHECKIN_FEE_LAMPORTS, checkin, checkinSignerFrom, generateCheckinKey } from "../../tools/src/checkin.ts";
-import { decodePlan, isPlan, type Terms } from "../../tools/src/claim.ts";
+import { decodePlan, heirMatches, type HeirRef, isPlan, type Terms } from "../../tools/src/claim.ts";
 import { renderKit } from "../../tools/src/kit.ts";
 import { forgetCheckinKey, loadCheckinKey, saveCheckinKey } from "./keystore.ts";
 import { letterPanel } from "./letter-panel.ts";
+import { keptSalts } from "./salts.ts";
 import { buildPrograms } from "./terms.ts";
 
 declare const __APP_BUILD__: string | undefined;
@@ -110,20 +111,28 @@ function kitsPanel(ctx: HeirCtx, plan: Promise<Terms | null>): HTMLElement | nul
     el("p", { class: "quiet" }, "A kit is one page to print for each heir: what this is, the addresses, and the exact steps to claim. It holds no key. Whoever finds it cannot take anything, but learns that the vault exists and who inherits."));
   const list = el("div", { class: "actions" });
   box.append(list);
-  const kit = (heir: PublicKey, terms: Terms | undefined) => {
-    const b = el("button", { class: "btn", type: "button" }, `Kit for ${short(heir.toBase58(), 5)}`);
+  const kit = (heir: PublicKey, terms: Terms | undefined, salt?: Uint8Array) => {
+    const b = el("button", { class: "btn", type: "button", "data-kit": heir.toBase58() }, `Kit for ${short(heir.toBase58(), 5)}${salt ? " · private, with their salt" : ""}`);
     b.addEventListener("click", () => {
       try {
-        openKit(renderKit({ cluster: CLUSTER, rpcUrl: RPC_URL.startsWith("http") && !RPC_URL.includes(location.host) ? RPC_URL : "https://api.devnet.solana.com", programs, vault: ctx.address, claim: s.claim, ...(terms ? { terms } : {}), heirAddress: heir, windowSecs: s.windowSecs, waitSecs: s.waitSecs, printedAt: new Date(), source: { repository: "https://github.com/Lamport-Robotics/lamport-heir", commit: typeof __APP_BUILD__ === "string" ? __APP_BUILD__ : "dev" } }));
+        openKit(renderKit({ cluster: CLUSTER, rpcUrl: RPC_URL.startsWith("http") && !RPC_URL.includes(location.host) ? RPC_URL : "https://api.devnet.solana.com", programs, vault: ctx.address, claim: s.claim, ...(terms ? { terms } : {}), heirAddress: heir, ...(salt ? { salt } : {}), windowSecs: s.windowSecs, waitSecs: s.waitSecs, printedAt: new Date(), source: { repository: "https://github.com/Lamport-Robotics/lamport-heir", commit: typeof __APP_BUILD__ === "string" ? __APP_BUILD__ : "dev" } }));
       } catch (e) { box.append(el("div", { class: "err" }, String((e as Error).message ?? e))); }
     });
     list.append(b);
   };
   void plan.then((terms) => {
     if (terms) {
-      if (terms.primary.kind === "address") kit(terms.primary.address, terms);
-      if (terms.contingent.kind === "address") kit(terms.contingent.address, terms);
-      if (terms.primary.kind === "hashed" || terms.contingent.kind === "hashed") box.append(el("p", { class: "quiet" }, "An heir kept private needs their salt on the kit, and only the command-line tool that made the plan has it."));
+      // an heir kept private has their salt on their kit, and it comes from this browser, where the plan was made
+      const kept = keptSalts(ctx.address);
+      let missing = false;
+      const forHeir = (h: HeirRef) => {
+        if (h.kind === "address") kit(h.address, terms);
+        if (h.kind !== "hashed") return;
+        const mine = kept.find((k) => heirMatches(h, k.heir, k.salt));
+        if (mine) kit(mine.heir, terms, mine.salt); else missing = true;
+      };
+      forHeir(terms.primary); forHeir(terms.contingent);
+      if (missing) box.append(el("p", { class: "quiet" }, "An heir kept private has their salt on their kit, and this browser does not hold it. The browser the plan was made in can print that kit."));
       box.append(el("p", { class: "quiet", style: "font-size:12.5px" }, `The plan gives the first heir everything, and the second the right to claim if the first has not, ${terms.contingent.kind === "none" ? "which this plan does not use" : `${days(terms.contingentDelaySecs)} after the release`}.`));
     } else kit(s.claim, undefined);
   }).catch(() => { box.append(el("p", { class: "quiet" }, "The claim address could not be read just now; reload to try again.")); });
