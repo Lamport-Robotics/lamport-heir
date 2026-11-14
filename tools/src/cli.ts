@@ -10,6 +10,8 @@
  *   finisher --keypair FILE                       keep finishing every vault that is due
  *   pincer-arm    <vault>                         on the robot: arm Pincer1's own switch to match the vault's plan
  *   pincer-status <vault>                         on the robot: compare what was armed with the robot and the chain
+ *   letter-key  <plan> --writer ADDRESS --keypair FILE   make your key for reading the owner's family letter
+ *   letter-open <file> --keypair FILE             read a family letter that was written for you
  *
  * Common options:  --rpc URL   any Solana RPC endpoint (default: $LAMPORT_HEIR_RPC, else devnet)
  *                  --dry-run   ask the cluster what would happen and send nothing
@@ -28,6 +30,7 @@ import { Finisher } from "./finisher.ts";
 import { parseSalt, renderKit } from "./kit.ts";
 import { RobotDaemon } from "./pincer/daemon.ts";
 import { arm as armRobot, type ArmRecord, drift, type RobotPlan } from "./pincer/link.ts";
+import { keySigner, makeReadingKey, readLetter, readLetterFile, type ReceivedLetter } from "./letter.ts";
 import { PROGRAMS, SHORT_CLOCKS_PROGRAMS } from "./programs.ts";
 import { describeStep, finish, inspect, type Situation, start, type Step } from "./release.ts";
 import { holdingsOf } from "./tokens.ts";
@@ -43,7 +46,7 @@ export interface Args {
   flags: Map<string, string | true>;
 }
 
-const VALUE_FLAGS = new Set(["rpc", "keypair", "salt", "salt-file", "heir", "label", "out", "cluster", "interval", "max-new-token-accounts", "commit", "daemon", "nonce-account", "mints", "record"]);
+const VALUE_FLAGS = new Set(["rpc", "keypair", "salt", "salt-file", "heir", "label", "out", "cluster", "interval", "max-new-token-accounts", "commit", "daemon", "nonce-account", "mints", "record", "writer"]);
 const BOOLEAN_FLAGS = new Set(["dry-run", "once", "short-clocks", "help"]);
 
 /** Splits a command line into the command, its positional arguments and its `--flags`. */
@@ -222,6 +225,10 @@ const HELP = `lamport-heir: collect what a Lamport Vault leaves its heirs, with 
                                            write an heir's claim kit (HTML to print)
   finisher --keypair FILE [--interval SECONDS] [--once] [--max-new-token-accounts N] [--short-clocks]
                                            keep finishing every vault that is due
+  letter-key  <plan> --writer ADDRESS --keypair FILE
+                                           make your key for reading the family letter the owner
+                                           writes; prints one line to send to the owner (not a secret)
+  letter-open <file> --keypair FILE        read a family letter that was written for you
 
   On the robot's own computer, for a Pincer1 (they talk to its daemon on 127.0.0.1 and need no key):
   pincer-arm    <vault> [--heir ADDRESS] [--mints MINT,MINT] [--nonce-account ADDRESS]
@@ -317,6 +324,36 @@ export async function main(argv: string[], io: Io): Promise<number> {
       } else {
         io.out(html);
       }
+      return 0;
+    }
+    case "letter-key": {
+      // signs three sentences with the key file and sends nothing anywhere
+      const heir = loadKeypair(args.flags.get("keypair"));
+      const plan = address(args.positional[0], "the plan address");
+      const writerFlag = args.flags.get("writer");
+      const writer = address(typeof writerFlag === "string" ? writerFlag : undefined, "--writer ADDRESS (the owner's wallet, as the owner gave it to you)");
+      const { line } = await makeReadingKey(keySigner(heir.secretKey.subarray(0, 32)), heir.publicKey, plan, writer);
+      io.out(line);
+      return 0;
+    }
+    case "letter-open": {
+      const heir = loadKeypair(args.flags.get("keypair"));
+      const path = args.positional[0];
+      if (!path) throw new UsageError("the letter's file is missing");
+      let text: string;
+      try {
+        text = readFileSync(path, "utf8");
+      } catch {
+        throw new UsageError(`could not read a letter at ${path}`);
+      }
+      const received: ReceivedLetter = readLetterFile(text);
+      const letter = await readLetter(keySigner(heir.secretKey.subarray(0, 32)), heir.publicKey, received);
+      io.out(`A family letter for plan ${received.plan.toBase58()}`);
+      io.out(`Written and signed by ${received.writer.toBase58()}, the wallet your reading key was made for, on ${received.sealedAt}.`);
+      io.out("A family letter never asks you for money, a key or a seed phrase. If this one does, it is not what it seems.");
+      io.out("");
+      // a letter is somebody else's text on this terminal: nothing in it gets to move the cursor or redraw the lines above
+      io.out(letter.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, ""));
       return 0;
     }
     case "finisher": {

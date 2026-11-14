@@ -9,11 +9,13 @@
  * `renderKit` checks the page against the terms before it prints anything, because a kit with a
  * wrong address or a wrong salt is worse than no kit: the heir learns it only when they claim.
  */
-import { sha256 } from "@noble/hashes/sha2.js";
 import { type PublicKey } from "@solana/web3.js";
 import QRCode from "qrcode";
-import { heirMatches, planAddress, type Terms } from "./claim.ts";
+import { heirCommitment, heirMatches, planAddress, type Terms } from "./claim.ts";
 import { type Programs } from "./programs.ts";
+import { formatSalt } from "./salt.ts";
+
+export { formatSalt, parseSalt } from "./salt.ts";
 
 export interface KitInput {
   /** Who the page is for, in the owner's words. Printed as given. */
@@ -41,26 +43,6 @@ export interface KitInput {
 }
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-
-/**
- * A salt as the kit prints it: 64 hex digits, a dash, and 4 check digits (the first two bytes of
- * its SHA-256). The check lets the claim tool catch a mistyped salt before it looks like "you are
- * not an heir".
- */
-export function formatSalt(salt: Uint8Array): string {
-  if (salt.length !== 32) throw new RangeError(`a salt is 32 bytes, got ${salt.length}`);
-  return `${hex(salt)}-${hex(sha256(salt).slice(0, 2))}`;
-}
-
-/** Reads a salt as printed by {@link formatSalt}, with or without spaces and the check digits. */
-export function parseSalt(text: string): Uint8Array {
-  const clean = text.replace(/\s+/g, "").toLowerCase();
-  const m = /^([0-9a-f]{64})(?:-([0-9a-f]{4}))?$/.exec(clean);
-  if (!m) throw new Error("a salt is 64 hex digits, optionally followed by a dash and 4 check digits");
-  const salt = Uint8Array.from(m[1]!.match(/../g)!, (b) => parseInt(b, 16));
-  if (m[2] !== undefined && m[2] !== hex(sha256(salt).slice(0, 2))) throw new Error("the salt's check digits do not match: one of its digits is mistyped");
-  return salt;
-}
 
 function esc(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -114,6 +96,8 @@ export function renderKit(input: KitInput): string {
   const role = kitRole(input);
   const hashedHeir = input.terms !== undefined && (role === "primary" ? input.terms.primary : input.terms.contingent).kind === "hashed";
   if (hashedHeir && !input.salt) throw new Error("this heir is named by a salted hash: the kit must print the salt");
+  // a salt on the page of an heir who has none is another heir's, and this page would hand it to the wrong person
+  if (input.salt && !hashedHeir) throw new Error("the plan names this heir by address, so they have no salt: the salt given belongs to the heir the plan keeps private, and goes on that heir's kit only");
   const vault = input.vault.toBase58();
   const claim = input.claim.toBase58();
   const heir = input.heirAddress.toBase58();
@@ -194,7 +178,7 @@ ${salt ? `<figure>${qr(salt, 34)}<br>Your salt</figure>` : ""}
 </div>
 ${
   salt
-    ? `<div class="warn"><p><strong>Your salt.</strong> The plan does not publish your address. It stores a hash of your address and this salt, and your claim must show the salt. Without it you cannot claim, and nobody can recover it for you. The last four digits are a check against typing mistakes.</p><p class="salt">${esc(group(salt.slice(0, 64), 8))} - ${esc(salt.slice(65))}</p></div>`
+    ? `<div class="warn"><p><strong>Your salt.</strong> The plan does not publish your address. It stores a hash of your address and this salt, and your claim must show the salt. Without it you cannot claim, and nobody can recover it for you. The last four digits are a check against typing mistakes.</p><p class="salt">${esc(group(salt.slice(0, 64), 8))} - ${esc(salt.slice(65))}</p><p><strong>Your fingerprint.</strong> This is what the plan stores in place of your address. When the owner signs the plan, their offline signer shows a fingerprint and cannot tell whose it is: it has to be this one, character for character.</p><p class="salt">${esc(group(hex(heirCommitment(input.salt!, input.heirAddress)), 8))}</p></div>`
     : ""
 }
 
@@ -222,6 +206,15 @@ cd tools &amp;&amp; npm ci</pre></li>
 <pre>${esc(claimCommand)}</pre></li>
 </ol>
 
+${
+  input.terms && !hashedHeir
+    ? `<h2>If the owner left you a letter</h2>
+<p>The owner may have written a letter for their heirs: where other accounts are, who to call, where the papers are. It is a file whose name begins <code>lamport-heir-letter</code>. Only the heirs can read it, and it opens only if it was signed by the wallet you made your reading key for. Read it with the same key file:</p>
+<pre>${esc(`${tool} letter-open THE-LETTER-FILE --keypair YOUR-KEY-FILE`)}</pre>
+<p>A family letter never asks you for money, a key or a seed phrase. If one does, it is not what it seems.</p>
+`
+    : ""
+}
 <h2>If Lamport is gone</h2>
 <p>Nothing above depends on Lamport. The vault and the plan are programs on the Solana network. The tools talk to any Solana RPC endpoint: replace the one after <code>--rpc</code> with any other. The addresses on this page are all the tools need to find the vault.</p>
 

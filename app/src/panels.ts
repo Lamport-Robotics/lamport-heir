@@ -1,6 +1,6 @@
 /**
  * Under the plan's status on the Inheritance tab: the check-in key this browser keeps for the
- * vault, and the pages the heirs get.
+ * vault, the pages the heirs get, and a letter for them (letter-panel.ts).
  *
  * A check-in tells the chain the owner is alive without the 24 words. The key that signs it can
  * do nothing else: it cannot move funds or change the plan, and it stops counting two years after
@@ -18,6 +18,7 @@ import { CHECKIN_FEE_LAMPORTS, checkin, checkinSignerFrom, generateCheckinKey } 
 import { decodePlan, isPlan, type Terms } from "../../tools/src/claim.ts";
 import { renderKit } from "../../tools/src/kit.ts";
 import { forgetCheckinKey, loadCheckinKey, saveCheckinKey } from "./keystore.ts";
+import { letterPanel } from "./letter-panel.ts";
 import { buildPrograms } from "./terms.ts";
 
 declare const __APP_BUILD__: string | undefined;
@@ -100,7 +101,8 @@ function openKit(html: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-function kitsPanel(ctx: HeirCtx): HTMLElement | null {
+/** `plan`: the terms of the plan the vault releases to, or null when it releases to a plain address */
+function kitsPanel(ctx: HeirCtx, plan: Promise<Terms | null>): HTMLElement | null {
   const s = ctx.vault.succession;
   if (!s || s.claim.equals(PublicKey.default)) return null;
   const programs = buildPrograms();
@@ -117,9 +119,8 @@ function kitsPanel(ctx: HeirCtx): HTMLElement | null {
     });
     list.append(b);
   };
-  void rpc.getAccountInfo(s.claim, "confirmed").then((info) => {
-    if (info && info.owner.equals(programs.claim) && isPlan(info.data)) {
-      const terms = decodePlan(info.data).terms;
+  void plan.then((terms) => {
+    if (terms) {
       if (terms.primary.kind === "address") kit(terms.primary.address, terms);
       if (terms.contingent.kind === "address") kit(terms.contingent.address, terms);
       if (terms.primary.kind === "hashed" || terms.contingent.kind === "hashed") box.append(el("p", { class: "quiet" }, "An heir kept private needs their salt on the kit, and only the command-line tool that made the plan has it."));
@@ -131,7 +132,11 @@ function kitsPanel(ctx: HeirCtx): HTMLElement | null {
 
 export function extraPanels(ctx: HeirCtx): HTMLElement | null {
   const box = el("div", {}, checkinPanel(ctx));
-  const kits = kitsPanel(ctx);
-  if (kits) box.append(kits);
+  const s = ctx.vault.succession;
+  if (!s || s.claim.equals(PublicKey.default)) return box;
+  // what the vault releases to, read once for the panels that need it
+  const programs = buildPrograms();
+  const plan = rpc.getAccountInfo(s.claim, "confirmed").then((info) => (info && info.owner.equals(programs.claim) && isPlan(info.data) ? decodePlan(info.data).terms : null));
+  for (const panel of [kitsPanel(ctx, plan), letterPanel(ctx, plan)]) if (panel) box.append(panel);
   return box;
 }

@@ -5,7 +5,7 @@
  * Pure: a situation in, words out.
  */
 import type { PublicKey } from "@solana/web3.js";
-import { claimRole, contingentOpensAt, type HeirRef, type Terms } from "../../tools/src/claim.ts";
+import { claimRole, contingentOpensAt, heirMatches, type HeirRef, type Terms } from "../../tools/src/claim.ts";
 import type { ClaimVerdict } from "../../tools/src/claiming.ts";
 import type { Situation, Step } from "../../tools/src/release.ts";
 
@@ -45,8 +45,16 @@ export function placeInTerms(terms: Terms, me: PublicKey, daySecs: bigint): { na
   return { named: false, text: "The wallet you connected is not one of the addresses this plan names. Connect the wallet whose address you gave the owner." };
 }
 
-/** where a vault stands, for whoever is looking, and for `me` when a wallet is connected */
-export function situationWords(s: Situation, me?: PublicKey): Words {
+/** true when the plan keeps an heir private: named by a salted hash, which only the salt on their kit fits */
+export function keepsAnHeirPrivate(terms: Terms): boolean {
+  return terms.primary.kind === "hashed" || terms.contingent.kind === "hashed";
+}
+
+/**
+ * Where a vault stands, for whoever is looking, and for `me` when a wallet is connected. `salt` is
+ * what an heir kept private typed from their kit: with it the plan can tell that the wallet is theirs.
+ */
+export function situationWords(s: Situation, me?: PublicKey, salt?: Uint8Array): Words {
   const day = s.programs.daySecs;
   const lines: string[] = [];
   let warning: string | undefined;
@@ -56,10 +64,18 @@ export function situationWords(s: Situation, me?: PublicKey): Words {
   // who is asking
   let mine: "sole" | "primary" | "contingent" | "not_named" | "unknown" = "unknown";
   if (me) {
-    if (s.plan) mine = isHeir(s.plan.account.terms.primary, me) ? "primary" : isHeir(s.plan.account.terms.contingent, me) ? "contingent" : "not_named";
+    if (s.plan) mine = heirMatches(s.plan.account.terms.primary, me, salt) ? "primary" : heirMatches(s.plan.account.terms.contingent, me, salt) ? "contingent" : "not_named";
     else if (s.claim) mine = s.claim.equals(me) ? "sole" : "not_named";
   }
-  const place = mine === "sole" ? "This vault releases straight to your wallet." : mine === "primary" ? "You are the first heir of this vault's plan." : mine === "contingent" ? "You are the second heir of this vault's plan." : mine === "not_named" ? (s.plan && (s.plan.account.terms.primary.kind === "hashed" || s.plan.account.terms.contingent.kind === "hashed") ? "The wallet you connected is not named openly. This plan keeps heirs private: such an heir claims with the command-line tool and the salt printed in their kit." : "The wallet you connected is not named by this vault. You can still look, and anyone may finish a release, but only the named heirs receive anything.") : "";
+  // an heir found through their salt is told so: the plan does not show their address to anyone else
+  const terms = s.plan?.account.terms;
+  const privately = !!terms && ((mine === "primary" && terms.primary.kind === "hashed") || (mine === "contingent" && terms.contingent.kind === "hashed")) ? " The plan keeps you private, and the salt you entered fits." : "";
+  const notNamed = terms && keepsAnHeirPrivate(terms)
+    ? salt
+      ? "This wallet and this salt do not fit the heir this plan keeps private. Check every character of the salt against your kit, and that this is the wallet whose address you gave the owner."
+      : "The wallet you connected is not named openly. This plan keeps an heir private: if that is you, enter the salt printed on your kit."
+    : "The wallet you connected is not named by this vault. You can still look, and anyone may finish a release, but only the named heirs receive anything.";
+  const place = mine === "sole" ? "This vault releases straight to your wallet." : mine === "primary" ? `You are the first heir of this vault's plan.${privately}` : mine === "contingent" ? `You are the second heir of this vault's plan.${privately}` : mine === "not_named" ? notNamed : "";
 
   if (s.state === "open") {
     const st = s.status!;
@@ -90,7 +106,7 @@ export function situationWords(s: Situation, me?: PublicKey): Words {
     const p = s.plan.account;
     if (!p.activated) lines.push("The plan has not recorded the release yet. Collecting does that first.");
     else if (me) {
-      const role = claimRole(p, me, undefined, s.now);
+      const role = claimRole(p, me, salt, s.now);
       if (!role.ok && role.reason === "ContingentTooEarly") lines.push(`As the second heir you may claim from ${when(role.opensAt, s.now, day)}, unless the first heir claims before then.`);
     }
     const opens = contingentOpensAt(p);
@@ -123,7 +139,7 @@ export function verdictWords(v: ClaimVerdict, now: bigint, daySecs = 86_400n): s
     case "plan_not_created": return `This vault releases to ${v.address.toBase58()}, where nothing is set up. If that is a plan that was never created, it can still be created with exactly the heirs the owner chose.`;
     case "plan_for_another_vault": return "The plan was made for another vault and cannot be claimed through this one.";
     case "not_activated": return "The plan has not recorded the release yet. Try again.";
-    case "not_an_heir": return v.hashedHeirs ? "This wallet is not named openly in the plan. The plan keeps heirs private: such an heir claims with the command-line tool and the salt in their kit." : "This wallet is not an heir of the plan.";
+    case "not_an_heir": return !v.hashedHeirs ? "This wallet is not an heir of the plan." : v.saltGiven ? "This wallet and this salt do not fit the heir the plan keeps private. Nothing was sent. Check the salt against your kit, and the wallet against the address you gave the owner." : "This wallet is not named openly in the plan. The plan keeps an heir private: if that is you, enter the salt printed on your kit.";
     case "contingent_too_early": return `You are the second heir and may claim from ${when(v.opensAt, now, daySecs)}, unless the first heir claims before then.`;
   }
 }
