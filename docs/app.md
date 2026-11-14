@@ -8,7 +8,7 @@ the vault's site, `vault.lamportrobotics.com/heir/` (the project owner's decisio
 |---|---|---|
 | `index.html` | the owner | the vault page, built for the Heir-enabled program, with an Inheritance tab |
 | `signer.html` | the owner, offline | the vault's cold signer, built for the Heir-enabled program: one file, no network |
-| `claim.html` | an heir | accept being named; see where a vault stands; open the waiting period; collect |
+| `claim.html` | an heir | accept being named; see where a vault stands; open the waiting period; collect; read the family letter |
 
 ## The page and the signer are the vault's
 
@@ -22,7 +22,7 @@ its own in that place:
 | in the build of | this module | which adds |
 |---|---|---|
 | the signer | `app/src/ext-signer.ts` | `terms.ts`: who is behind a plan's address |
-| the page | `app/src/ext.ts` | the same, and `composer.ts` (heirs, acceptances, creating the plan) and `panels.ts` (the check-in key, the kits) |
+| the page | `app/src/ext.ts` | the same, and `composer.ts` (heirs, acceptances, creating the plan) and `panels.ts` (the check-in key, the kits, the letter) |
 
 The signer gets one file of this repository's, and that file reads no network. `build.mjs`
 fails if the signer's bundle contains page code, and the signer's own CSP (`connect-src 'none'`)
@@ -101,6 +101,61 @@ nothing but the Solana endpoint. What it does on chain is what `tools/` does, by
 
 The sentences are in `app/src/heir-words.ts`, apart from the page, and tested as text.
 
+## The family letter
+
+What no chain can tell the heirs: where other accounts are, who to call, where the papers are.
+The owner writes it on the Inheritance tab; it leaves the browser as a file that only the heirs
+can read and that only the owner's wallet can have made. No server holds it. The code is
+`tools/src/letter.ts`, used by the pages and by the command-line tool alike.
+
+1. **Each heir makes a reading key.** The owner sends a link, `claim.html#letter=<plan>&from=<the
+   owner's wallet>`. A wallet signs messages and decrypts nothing, so the heir's key is derived
+   from their wallet's signature over a sentence that names the plan and the owner's wallet. The
+   same wallet gives the same signature years later, so nothing has to be kept. The page asks for
+   that signature twice and refuses a wallet that answers differently the second time: such a
+   wallet could not make the key again on the day the letter is read. A third signature tells the
+   owner, in the heir's name, which public key is theirs. The heir sends back one line of text,
+   which is not a secret.
+2. **The owner writes and seals.** The page checks each line (this plan, this wallet, that heir's
+   own signature), warns if the text reads like a seed phrase or a key and seals only when the
+   owner presses again, encrypts the letter in the browser, and has the owner's wallet sign a
+   sentence that holds the SHA-256 of everything in the file. The page keeps the heirs' lines,
+   which are public, and no copy of the letter.
+3. **An heir reads.** `claim.html#letter`, or `letter-open` in the command-line tool: choose the
+   file. Before anything in it is believed, the page checks that the wallet it names as its writer
+   signed exactly this. Then the heir's wallet makes the key again and the letter is shown, as
+   text and never as markup.
+
+**A letter cannot be forged, even by someone who knows an heir's reading key.** A public key is
+something anyone can encrypt to, so without more the heirs' page would show a stranger's text
+under the words "the family letter". Two things stand in the way. The file is signed, so a letter
+that names the owner's wallet as its writer needs the owner's wallet. And the reading key is made
+from a sentence that names the writer, so a letter that names any other writer asks the heir's
+wallet for another sentence, which gives a key nobody ever encrypted to: it does not open. What
+remains is an heir who is talked into making a reading key for a stranger's wallet; the page says
+to make one only when the owner themselves sent the link, and every letter is shown with its
+writer's address and the line that a family letter never asks for money, a key or a seed phrase.
+
+What the owner should know, and is told on the page:
+
+- **An heir who has the file can read it at once**, not only after a release. An owner who wants
+  it read later keeps the file with their papers.
+- **Nobody can open a sealed letter for the owner**, the owner included. To change a letter they
+  write it again from their own copy.
+- **A newer letter does not undo an older one.** Each carries the day it was sealed.
+- **The reading key is tied to the wallet that signs the letters.** An owner who changes wallets
+  asks the heirs for new keys.
+- **A wallet that changes how it signs** loses the heir that key: the letter then has to be sealed
+  again, which needs the owner. The file records what the heir's wallet put in front of the
+  sentence, if anything, so that the command-line tool can make the same key from the key itself.
+
+Heirs kept private cannot be written to from the page: it does not know their address.
+
+Nothing on chain names the owner's wallet (a vault is owned by its 24 words, and a wallet only
+pays its fees), so the heirs' page cannot check the link's wallet against the chain. What it
+guarantees is narrower and is what it says when a letter opens: this letter was signed by the
+wallet the heir made their key for.
+
 ## Tests
 
 | what | where | count |
@@ -109,6 +164,8 @@ The sentences are in `app/src/heir-words.ts`, apart from the page, and tested as
 | the acceptance: format, envelope rule, refusals | `app/test/acceptance.test.ts` | 4 |
 | what the heirs' page says, phase by phase, and to the trusted contact | `app/test/heir-words.test.ts` | 14 |
 | the vault's own request code with this repository's module in its seam, as the signer is built | `app/test/signer-seam.test.ts` | 4 |
+| the link that asks an heir for a reading key | `app/test/letter-view.test.ts` | 2 |
+| the letter itself: keys, the file, forgeries, refusals | `tools/test/letter.test.ts`, `tools/test/cli.test.ts` | 18 + 2 |
 
 The tests run with the same alias and constants as the build, so they see the SDK the way the
 built pages do.
@@ -123,6 +180,7 @@ validator, and a headless Chromium clicks through them:
 | owner | creates a vault; names an heir | the plan cannot be created before the heir accepts; a damaged acceptance is refused |
 | heir | opens the owner's link, signs the sentence | their page says which vault and which place |
 | owner | creates the plan, makes a check-in key, signs on this device | the plan is the claim program's; the summary names the heir; the chain accepts the signature |
+| owner, heir | the heir makes a reading key; the owner writes a letter and saves the sealed file; the heir opens it | a reading key somebody changed on the way is refused; a letter that mentions a seed phrase is sealed only after a warning; the file holds none of the letter's words; a changed copy is refused before any wallet is asked; the letter is shown as text, never as markup; it is not offered to another wallet |
 | signer | is given a forged request, then the real one | the forged one is refused and cannot be signed; the real one shows the heir by name and never the words "close the vault"; its signature is accepted by the chain; the words are gone from the page afterwards |
 | owner | checks in with the browser's key | the chain records it |
 | contact | pushes the deadline back | offered to the contact's wallet only, once; the owner's page then shows the extension as used |
@@ -137,7 +195,8 @@ bound the vault's own program id; the chain refused it).
 
 - Nothing is deployed, on devnet or on the site.
 - Reminders are not wired into the page (the service has no public address yet).
-- The family letter has its code (`tools/src/letter.ts`) and no page.
+- The family letter is a file the owner hands over. Nothing stores it for them or delivers it at
+  the release, and the owner cannot open a sealed one again.
 - Heirs kept private, in the page.
 - Real wallets in the browser test: it uses the test key the pages offer on localhost. Wallet
   Standard wallets and hardware wallets were not driven by a machine or by hand.

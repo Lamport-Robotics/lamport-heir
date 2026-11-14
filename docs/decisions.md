@@ -206,11 +206,24 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
 - **The family letter is encrypted to a key each heir derives from a signature.** The spec says
   "encrypted on the owner's device to the heirs' keys". A wallet signs messages but does not
   decrypt them, so an heir's reading key is derived from their signature over a fixed sentence
-  naming the plan (Ed25519 signatures are deterministic, so the same wallet makes the same key
-  again years later), and the heir gives the owner the public half. X25519, HKDF-SHA-256 and
-  AES-256-GCM; the letter's key is wrapped once per heir. The sentence says the signature is a
-  private key and where to sign it. Before a letter is sealed it is checked for anything that
-  reads like a seed phrase or a key.
+  (Ed25519 signatures are deterministic, so the same wallet makes the same key again years
+  later; the page asks twice and refuses a wallet that does not), and the heir gives the owner
+  the public half, signed with their own key. X25519, HKDF-SHA-256 and AES-256-GCM; the letter's
+  key is wrapped once per heir. The sentence says the signature is a private key and where to
+  sign it. Before a letter is sealed it is checked for anything that reads like a seed phrase or
+  a key.
+- **A letter is signed by its writer, and a reading key opens one writer's letters only.** The
+  spec does not say how an heir knows a letter is the owner's, and anyone can encrypt to a public
+  key. So the owner's wallet signs each letter, and the sentence a reading key is made from names
+  that wallet: a letter from anyone else either fails the signature or asks the heir's wallet for
+  a key nobody encrypted to. The vault itself cannot sign a letter (its keys are one-time and
+  spend the vault's own signatures), so the writer is the wallet the owner pays fees with, fixed
+  at the moment the heirs make their keys ([`app.md`](app.md)).
+- **The letter is a file, and no server holds it.** The spec has the service keep the
+  ciphertext. There is no service address yet, and a file the owner hands over or keeps with
+  their papers needs none: it can be read with the page or with the command-line tool, whether
+  or not Lamport exists. The cost is said on the page: an heir who has the file reads it at
+  once, not only after a release.
 - **Push needs no provider.** Web Push is sent with a key pair the service makes for itself.
   Email needs a sending account, which is the project owner's to open. Email goes over SMTP, so
   any account will do; the libraries are `nodemailer` and `web-push`, with `smtp-server` in the

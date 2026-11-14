@@ -3,6 +3,7 @@
  *
  *   claim.html#accept=<terms>   someone named you: see what you are accepting, sign one sentence
  *   claim.html#<vault or plan>  where the vault stands, and what you may do about it
+ *   claim.html#letter           the family letter: make a reading key, or read one (letter-view.ts)
  *
  * Everything it does on chain is something anyone may do, except claiming, which the heir's own
  * wallet signs. It asks for no seed phrase and no key, has no field one could go in, and talks to
@@ -23,6 +24,7 @@ import { inspect, start, type Situation, type Step } from "../../tools/src/relea
 import { acceptanceBytes, isAcceptanceOf, writeAcceptance } from "./acceptance.ts";
 import { connect, listWallets, localTestWallet, onWalletsChange, type HeirWallet } from "./heir-wallet.ts";
 import { contactWords, durationInDays, placeInTerms, situationWords, stepWords, verdictWords } from "./heir-words.ts";
+import { letterView } from "./letter-view.ts";
 import { buildPrograms, termsFromJson } from "./terms.ts";
 
 const chain = rpc as unknown as Chain;
@@ -35,7 +37,7 @@ const main = el("div", { id: "main" });
 app.append(
   el("div", { class: "top app" },
     el("a", { class: "brand", href: "/heir/claim.html" }, el("img", { src: "/mark.svg", alt: "" }), el("b", {}, "Lamport Heir"), el("i", {}), el("small", {}, `for heirs · ${CLUSTER}`)),
-    el("nav", { class: "nav" }, el("a", { href: "/heir/" }, "For owners"), el("a", { href: "/how-it-works" }, "How the vault works")),
+    el("nav", { class: "nav" }, el("a", { href: "/heir/claim.html#letter", id: "navletter" }, "Family letter"), el("a", { href: "/heir/" }, "For owners"), el("a", { href: "/how-it-works" }, "How the vault works")),
     el("div", { class: "wallet", id: "walletbox" })),
   main,
   el("footer", {}, el("a", { href: "https://github.com/Lamport-Robotics/lamport-heir" }, "Source"), el("a", { href: "https://lamportrobotics.com" }, "Lamport Robotics"),
@@ -81,6 +83,7 @@ function route() {
   const h = location.hash.slice(1);
   main.innerHTML = "";
   if (h.startsWith("accept=")) main.append(acceptView(h.slice(7)));
+  else if (h === "letter" || h.startsWith("letter=")) main.append(letterView(h.slice(6), { wallet, pickWallet }));
   else main.append(statusView(isPubkey(h) ? h : ""));
 }
 
