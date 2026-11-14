@@ -307,10 +307,7 @@ jobs:
           (cd vendor/lamport-vault/web && npm ci --ignore-scripts)
           (cd app && npm ci --ignore-scripts)
 
-      - name: A browser
-        working-directory: app
-        run: npx playwright install --with-deps chromium
-
+      # the browser is the Chrome the runner image comes with
       - name: The pages, in a browser
         working-directory: app
         run: npm run e2e

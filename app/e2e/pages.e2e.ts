@@ -70,8 +70,9 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => server.listen(0, "localhost", resolve));
   base = `http://localhost:${(server.address() as AddressInfo).port}`;
-  // the full browser in its headless mode, not the cut-down "headless shell": it is the one people use
-  browser = await chromium.launch({ channel: "chromium" });
+  // the Chrome that is installed on the machine, in its headless mode: the browser people use, and
+  // nothing to download. HEIR_E2E_BROWSER names another channel ("chromium" for Playwright's own).
+  browser = await chromium.launch({ channel: process.env.HEIR_E2E_BROWSER ?? "chrome" });
 });
 
 afterAll(async () => {

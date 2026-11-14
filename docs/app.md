@@ -103,7 +103,8 @@ The sentences are in `app/src/heir-words.ts`, apart from the page, and tested as
 The tests run with the same alias and constants as the build, so they see the SDK the way the
 built pages do.
 
-**In a browser** (`app/e2e/pages.e2e.ts`, `npm run e2e`, part of CI's end-to-end job). The pages
+**In a browser** (`app/e2e/pages.e2e.ts`, `npm run e2e`, part of CI's end-to-end job; it uses the
+Chrome installed on the machine, or with `HEIR_E2E_BROWSER=chromium` the one Playwright installs). The pages
 are built as they are shipped, as a test build for the `short-clocks` programs and a local
 validator, and a headless Chromium clicks through them:
 
