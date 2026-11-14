@@ -119,7 +119,7 @@ export function buildClaimKat() {
 
   return {
     source: "lamport-heir, tools/scripts/claim-kat.ts",
-    note: "Byte layouts of programs/heir-claim. The program ids are placeholders with no private key until a deployment exists. Addresses made of one repeated byte are artificial.",
+    note: "Byte layouts of programs/heir-claim. Addresses made of one repeated byte are artificial.",
     program_ids: {
       heir_claim: HEIR_CLAIM_PROGRAM_ID.toBase58(),
       heir_claim_short_clocks: HEIR_CLAIM_SHORT_CLOCKS_PROGRAM_ID.toBase58(),

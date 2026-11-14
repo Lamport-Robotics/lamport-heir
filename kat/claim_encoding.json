@@ -1,11 +1,11 @@
 {
   "source": "lamport-heir, tools/scripts/claim-kat.ts",
-  "note": "Byte layouts of programs/heir-claim. The program ids are placeholders with no private key until a deployment exists. Addresses made of one repeated byte are artificial.",
+  "note": "Byte layouts of programs/heir-claim. Addresses made of one repeated byte are artificial.",
   "program_ids": {
-    "heir_claim": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
-    "heir_claim_short_clocks": "HzoHmRyCtxv8nd9u9NpnLTJcJssGJvyvbjeWBY7BMXPD",
-    "vault": "HK1QPbqjkozJHB74QuGaduYzAtqBe9hry3nV64LmpCsb",
-    "vault_short_clocks": "DGe6SeUVApXcN7j3X613SeTmazXGqtAuFSn7RQWBiDDS"
+    "heir_claim": "cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW",
+    "heir_claim_short_clocks": "HxMZSdKeFP2zJzhYUVNHefqEEz3B87EdTRjKwwPG6UhE",
+    "vault": "3mJU9ozZByXsHavMGfzdwDLFs9YuFaMA3jabaLwczxAV",
+    "vault_short_clocks": "3pwH161r4SZRH6nCHY4RUm7gk2NZqypyFJaUgv9a2duG"
   },
   "discriminators": {
     "init_plan": "c6e7545b7930bf2b",
@@ -51,8 +51,8 @@
       "contingent_delay_secs": "0",
       "encoded_hex": "11111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000000000000000000000000",
       "terms_hash_hex": "49053a778f30088809d8d5ab0da7124f65e2ecdbaee3edd69333064c88c3d2a2",
-      "plan_address": "EwGgmLUxQzjjf35my2LTdsXS5crQURkZQXgBSnyAL1xa",
-      "plan_address_short_clocks": "HJJYKytYGMzHmwC3jugQLx7fKrwEXvr7mTd29WY2LPjd"
+      "plan_address": "Hrp1Ld5cxA4x7SQgkTgEzS8Xuj65PLwSENQ4VmYK8uXk",
+      "plan_address_short_clocks": "3qSXgjGXVjxHv7N3WgMZV3adsx3GxUdjZTzMwpQEVNij"
     },
     {
       "name": "a primary and a contingent heir",
@@ -68,8 +68,8 @@
       "contingent_delay_secs": "31536000",
       "encoded_hex": "11111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220133333333333333333333333333333333333333333333333333333333333333338033e10100000000",
       "terms_hash_hex": "e2409ab502716ef3b5fa53bff9a38e414aa26362dfda8c36a841a06d6db632cb",
-      "plan_address": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
-      "plan_address_short_clocks": "D1ZX5n4d9ecoNFeCoa3aLbWoTC36rbgbQj58EsWMcQUz"
+      "plan_address": "HkHYb3UbHZFJdiesz9VZLwWJPhnqebs56Dt4rqcxrhuT",
+      "plan_address_short_clocks": "9oGJtURcvUopWPGCiC6zwyjTxmJHQrZDgnHqi4vQgRCC"
     },
     {
       "name": "two hashed heirs",
@@ -85,8 +85,8 @@
       "contingent_delay_secs": "2592000",
       "encoded_hex": "111111111111111111111111111111111111111111111111111111111111111102024e2fccd3db682945ed0aae5fab50f65ea9b7c991014b2917e0b3386d103f7802a908ed40287e7acb68b99bd5a9795fff52d0255c25b3db9008d0fc60ca8a89fc008d270000000000",
       "terms_hash_hex": "250453195b5204454279527bebc16887566f6c436678e8a827ad60146800dc16",
-      "plan_address": "tGnGVwCXQ6vwgntGmv5AL8RNTkyeknfhEhJMCkK6QuT",
-      "plan_address_short_clocks": "23yNgWPgzKr2rwPY4JwZxAsMJQGV3ozyCg7W7JTkXM3p"
+      "plan_address": "5pfnLHBM7kP6tXz3Z9tG9UY9S9oq9tu6nRejQUsiQjjw",
+      "plan_address_short_clocks": "ExxV4XZiMeSh4oZ4zcqNWRFK7f74FJMvKLr5bbWPsKwE"
     },
     {
       "name": "a named primary and a hashed contingent heir, the longest delay",
@@ -102,8 +102,8 @@
       "contingent_delay_secs": "3153600000",
       "encoded_hex": "111111111111111111111111111111111111111111111111111111111111111101222222222222222222222222222222222222222222222222222222222222222202a908ed40287e7acb68b99bd5a9795fff52d0255c25b3db9008d0fc60ca8a89fc001ef8bb00000000",
       "terms_hash_hex": "52be0ec8cabe28191ee4d363d73e535c6bcadb20ca517f021ce7ced5bbd42f3c",
-      "plan_address": "3mh3VEF3tWZmTsH7kXasPBK3Br1CNKerU1H7mMGg9RAH",
-      "plan_address_short_clocks": "2eYtYXpKRLztLya4kF6ByNFSZ6h9kTZLFhQGnHTQ2kKk"
+      "plan_address": "H7PuMvQxB4mVasVbVyDUCNbqFeFix4eATPHwv1WNXijW",
+      "plan_address_short_clocks": "2EStuYtGm4ZJqCKUL6AKEscQ72vavZmYX4kbkkdJkka2"
     }
   ],
   "heir_commitments": [
@@ -124,8 +124,8 @@
     }
   ],
   "acceptance_message": {
-    "plan": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
-    "text": "Lamport Heir: I control this address and accept being named an heir in plan J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU."
+    "plan": "HkHYb3UbHZFJdiesz9VZLwWJPhnqebs56Dt4rqcxrhuT",
+    "text": "Lamport Heir: I control this address and accept being named an heir in plan HkHYb3UbHZFJdiesz9VZLwWJPhnqebs56Dt4rqcxrhuT."
   },
   "plan_accounts": [
     {
@@ -247,7 +247,7 @@
   "instructions": [
     {
       "name": "init_plan, the payer is the primary heir",
-      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "program_id": "cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW",
       "data_hex": "c6e7545b7930bf2b49053a778f30088809d8d5ab0da7124f65e2ecdbaee3edd69333064c88c3d2a211111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000000000000000000000000",
       "accounts": [
         {
@@ -256,7 +256,7 @@
           "writable": true
         },
         {
-          "pubkey": "EwGgmLUxQzjjf35my2LTdsXS5crQURkZQXgBSnyAL1xa",
+          "pubkey": "Hrp1Ld5cxA4x7SQgkTgEzS8Xuj65PLwSENQ4VmYK8uXk",
           "signer": false,
           "writable": true
         },
@@ -279,7 +279,7 @@
     },
     {
       "name": "init_plan, both heirs sign beside the payer",
-      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "program_id": "cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW",
       "data_hex": "c6e7545b7930bf2be2409ab502716ef3b5fa53bff9a38e414aa26362dfda8c36a841a06d6db632cb11111111111111111111111111111111111111111111111111111111111111110122222222222222222222222222222222222222222222222222222222222222220133333333333333333333333333333333333333333333333333333333333333338033e10100000000",
       "accounts": [
         {
@@ -288,7 +288,7 @@
           "writable": true
         },
         {
-          "pubkey": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+          "pubkey": "HkHYb3UbHZFJdiesz9VZLwWJPhnqebs56Dt4rqcxrhuT",
           "signer": false,
           "writable": true
         },
@@ -321,11 +321,11 @@
     },
     {
       "name": "activate",
-      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "program_id": "cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW",
       "data_hex": "c2cb23649737aa52",
       "accounts": [
         {
-          "pubkey": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+          "pubkey": "HkHYb3UbHZFJdiesz9VZLwWJPhnqebs56Dt4rqcxrhuT",
           "signer": false,
           "writable": true
         },
@@ -338,11 +338,11 @@
     },
     {
       "name": "claim_sol, no salt",
-      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "program_id": "cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW",
       "data_hex": "8b71b3bdbe1e84c300",
       "accounts": [
         {
-          "pubkey": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+          "pubkey": "HkHYb3UbHZFJdiesz9VZLwWJPhnqebs56Dt4rqcxrhuT",
           "signer": false,
           "writable": true
         },
@@ -355,11 +355,11 @@
     },
     {
       "name": "claim_sol, with a salt",
-      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "program_id": "cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW",
       "data_hex": "8b71b3bdbe1e84c301a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
       "accounts": [
         {
-          "pubkey": "tGnGVwCXQ6vwgntGmv5AL8RNTkyeknfhEhJMCkK6QuT",
+          "pubkey": "5pfnLHBM7kP6tXz3Z9tG9UY9S9oq9tu6nRejQUsiQjjw",
           "signer": false,
           "writable": true
         },
@@ -372,11 +372,11 @@
     },
     {
       "name": "claim_token, close the account",
-      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "program_id": "cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW",
       "data_hex": "74ce1bbfa61300490001",
       "accounts": [
         {
-          "pubkey": "J93e4sNuGKpm9nJL22Hq8NmDrNWJ4uQ55SoLQyWmBEhU",
+          "pubkey": "HkHYb3UbHZFJdiesz9VZLwWJPhnqebs56Dt4rqcxrhuT",
           "signer": false,
           "writable": true
         },
@@ -409,11 +409,11 @@
     },
     {
       "name": "claim_token, Token-2022, with a salt, keep the account, one extra account",
-      "program_id": "2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd",
+      "program_id": "cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW",
       "data_hex": "74ce1bbfa613004901b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b200",
       "accounts": [
         {
-          "pubkey": "tGnGVwCXQ6vwgntGmv5AL8RNTkyeknfhEhJMCkK6QuT",
+          "pubkey": "5pfnLHBM7kP6tXz3Z9tG9UY9S9oq9tu6nRejQUsiQjjw",
           "signer": false,
           "writable": true
         },
