@@ -105,7 +105,7 @@ removes or weakens that rule and requires a test to notice (`tests/mutants/` in 
 | S5 | When a request names heirs, the signer derives the plan's address from them and refuses anything short of an exact match | `app/test/terms.test.ts`: `refuses a claim address the named heirs do not give`, `refuses a plan made for another vault`, `refuses terms the claim program would refuse, and terms it cannot read`, `are read strictly` |
 | S6 | If the signer cannot show the plan, it shows nothing and signs nothing; a request the seam objects to is never described | `showPlan` throws and the caller clears the request (lamport-vault `web/src/signer.ts`, after the `try` block), read; `app/test/signer-seam.test.ts` runs the vault's request code with this repository's module in its seam: `refuses a request that shows the owner's heirs and pays somebody else's plan, and describes nothing`; `app/e2e/pages.e2e.ts` gives the built signer a forged request and then presses Sign |
 | S7 | The Heir signer holds no code that talks to a network | `app/build.mjs` fails the build otherwise; the page's CSP is `connect-src 'none'` |
-| S8 | The page creates a plan only after every heir named by address has signed for it | `app/test/acceptance.test.ts`; the claim program checks the same signatures again (C7) |
+| S8 | The page creates a plan only after every heir has signed for it with the key of the address the owner wrote down, and uses a plan it found only when an heir it keeps private has | `app/test/acceptance.test.ts` (strictly: `is never taken from an address of small order`); for named heirs the claim program checks the same signatures again (C7); `app/test/composer.test.ts`: `a plan somebody else put on the chain is not taken on trust` |
 | S9 | The page refuses a claim address that nothing exists at and no key signs for, a program, a token account, and a vault whose plan names this one; it says so when an address is a program's and holds only SOL | `claimProblemOnChain`, `claimNoteOnChain` in lamport-vault `web/src/heir-page.ts`; the browser test covers the first case (the plan's address before the plan exists), the rest are read, **not tested** |
 | S10 | The heirs' page asks for no key and no seed phrase | by reading: the fields of `app/src/claim-page.ts` and `app/src/letter-view.ts` take an address, a private heir's salt (not a key: it moves nothing, and is kept only while the page is open), and a letter's file or text |
 | S11 | The three pages work together, built as they are shipped, from an empty wallet to an heir holding the vault's SOL | `app/e2e/pages.e2e.ts`, a headless browser on a local validator; it also fails on any uncaught error in a page |
@@ -113,6 +113,26 @@ removes or weakens that rule and requires a test to notice (`tests/mutants/` in 
 The terms in a request (S5) are not part of what is signed: the signature covers the claim
 address, which is all the vault program knows. The terms are how the signer explains that
 address, and it accepts them only when they hash to it.
+
+### An heir kept private
+
+A plan can hold `sha256(domain || salt || address)` in place of an heir's address. Such an heir
+collects with their salt, so **a salt that is lost is an heir who can never collect**, and if
+they were the only heir the vault's funds stay in the plan for good. Nothing on chain can
+recover a salt. What stands between an owner and that outcome is the owner's page
+([`../app.md`](../app.md), "An heir kept private"); the tests named here are in
+`app/test/composer.test.ts` unless another file is given.
+
+| # | property | held by |
+|---|---|---|
+| P1 | No plan with a private heir is created, found or handed to the form the owner signs before that heir's salt is stored and the owner has typed its check digits | `nothing reaches the form or the chain before the salt's check digits; a wrong answer stops`; `two of them: both slips are answered before either counts` |
+| P2 | The salt the owner wrote down, the one in the heir's link, the one in the plan and the one on the kit are one salt | the same test reads the link, the terms and the store; the browser test compares the slip, the link, the heir's page, the plan's account, the signer's screen and the kit |
+| P3 | A salt is made only by the owner's own press | `an address typed and then any rebuild of the form: the network is asked nothing about it, and no salt is made`; `whose salt left the browser: no rebuild makes another by itself` |
+| P4 | A plan is created, or handed to the form, only while the browser still holds the very salt it was prepared with | `whose salt leaves the browser while the page waits for their acceptance`; `... while the slip is on the screen`; `... while the page is asking the chain for their plan` |
+| P5 | The private heir always receives their salt before the plan exists, in a link nobody else is sent | `who is also the wallet that pays still gets their link and accepts`; `app/test/accept-link.test.ts`: `carries an heir's salt when the plan keeps them private, and their address nowhere` |
+| P6 | A private heir's address reaches neither the chain, nor the endpoint, nor the signing request, nor the other heir | `their proof and their address go nowhere`; the browser test reads the plan's account and the transaction that created it; limit 21 for what this does not cover |
+| P7 | An edit of the heirs cancels whatever an earlier press is still waiting for | `the box ticked while an earlier Prepare is still asking the chain: that Prepare is dropped`; `heirs changed while the wallet is asked to pay: the plan that was paid for is not handed to the form` |
+| P8 | The browser's store of salts is never written over when it cannot be read | `app/test/salts.test.ts`: `are never written over when an entry cannot be read`, `... when the vault's whole record cannot be read`, `leave every other entry as it was` |
 
 ### The family letter
 
@@ -183,18 +203,18 @@ Stated plainly, so that nobody finds them by surprise.
    wallet to an heir holding the vault's SOL ([`../app.md`](../app.md)), with the key the pages
    offer on localhost. No Wallet Standard wallet and no hardware wallet has been driven, by a
    machine or by hand.
-10. **The owner's page names heirs by address only.** A plan with an heir kept private (a salted
-    hash) is made with the command-line tools. Such an heir collects on the heirs' page with the
-    salt from their kit; that field is tested as words and through the claim code on a validator,
-    not by the browser test.
+10. **A private heir collecting in a browser is tested up to the page knowing them by their
+    salt.** The claim itself with a salt runs on a validator through the same code
+    (`tools/e2e/release.e2e.ts`, vault C), not through the page.
 11. **Nobody can sign up for reminders from the page.** Whoever runs the service adds vaults by
     hand; email has no sending account yet ([`../reminders.md`](../reminders.md)).
 12. **Whoever controls the page an owner uses can lie on that page.** The offline signer is the
     defence, and it covers what is signed: the claim address and who is behind it, the durations,
     the two keys. It cannot cover what the page says afterwards about the state of the chain.
 13. **The signer cannot say who a private heir is.** For an heir kept as a salted hash it shows
-    the whole fingerprint and says it cannot tell whose address is behind it. The owner's only
-    reference is the kit they printed, which prints that fingerprint.
+    the whole fingerprint and says it cannot tell whose address is behind it. The owner's
+    reference is what they wrote down with the salt, which the page shows again beside the plan
+    and the heir's kit prints.
 14. **An heir's claim has no limit on new token accounts.** Anyone can make a released vault's
     address hold worthless tokens; each one the heir sweeps and claims is a wallet prompt and
     about 0.002 SOL of rent, which comes back when the account is closed. The heir can decline
@@ -221,6 +241,19 @@ Stated plainly, so that nobody finds them by surprise.
     and can miss one written another way.
 20. **One sealed file could be made to read differently to two heirs**, by its writer and by
     nobody else: AES-GCM does not commit to its key. The writer could as well send two letters.
+21. **Keeping an heir private hides their address in the plan and nothing else.** Whoever sees
+    their link, their acceptance line or their kit learns it. The endpoint learns it if the owner
+    pressed "Prepare" before ticking the box, and the page then says so. A plan that already
+    names the address openly stays on the chain. Opening the waiting period, like collecting, is
+    signed in public by the wallet that does it. The salt in a link also stays in that browser's
+    history.
+22. **The salt's safety rests on the owner's paper and the heir's own copy.** A page cannot know
+    that a browser will keep what it stored: a private window loses it when it closes. The page
+    says so, reads its copy back before every step that commits to a plan, and cannot do more.
+    Typing four check digits shows that the owner saw the salt, not that they kept it.
+23. **A private heir who is also the only heir, and whose salt is lost everywhere, leaves the
+    vault's funds in the plan for good.** Nothing on chain recovers a salt. A second heir named
+    by address is the remedy the page cannot impose.
 
 ## Where the spec was not followed
 
@@ -313,6 +346,46 @@ wrapped key moved to another recipient were all refused.
 how wallets other than the test key sign messages: whether each wraps a sentence, and whether it
 does so the same way from one version to the next (limit 18).
 
+## Review of keeping an heir private
+
+A fifth reviewer, who had not seen it, read the owner's form, the salt store, the accept link
+and the heirs' page before any of it was pushed, and drove the form through a stand-in for the
+page with the chain mocked. The question put first: can a plan with a private heir be created
+or armed while its salt is not stored and written down?
+
+**Not found:** a way to do that. Nothing reached the form, the chain or the plan lookup before
+the check digits; the salt on the slip, in the link, in the terms and on the kit was one salt;
+with the box ticked first, the private address was absent from the transaction, the other
+heir's link, the signing request, the endpoint, the letter and the other heir's kit.
+
+**Found, and fixed before the first push** (commit "app: an heir can be kept private from the
+owner's page"):
+
+- The first version said a private window would be refused. Browsers accept the write and
+  discard it later, so nothing was refused. The browser's copy is now treated as a convenience,
+  and the page says so (limit 22).
+- That copy was checked once, when the salt was made. A plan could be created, or handed to the
+  form, after the browser had lost it (P4).
+- A form that was rebuilt made a new salt by itself when the old one was gone, and showed a slip
+  for it with nothing to say it was new (P3).
+- A salt once written down was never shown again, though the signer tells the owner to compare.
+- A plan found on the chain was taken as accepted. Anyone holding the terms can create a plan
+  for a fingerprint (S8).
+- Ticking the box while an earlier lookup was still running created a plan that named the
+  address openly (P7); a rebuilt form looked addresses up with no press (P3).
+- A private heir was told their acceptance line "is not a secret"; a private heir who paid got
+  no link (P5); a link that lost its salt told the right wallet it was the wrong one.
+- An acceptance was checked by the lenient rule: eight addresses nobody holds accepted anything
+  (S8).
+- The salt store wrote over entries it could not read (P8).
+- Opening the waiting period ties a private heir's wallet to the vault before they collect; the
+  heirs' page now says so (limit 21).
+
+The reviewer's stand-in for the page is kept as `app/test/composer.test.ts`.
+
+**Not covered by that review:** a real browser's storage behaviour (limit 22), and the claim
+with a salt through the page (limit 10).
+
 ## Running everything
 
 ```sh
@@ -321,7 +394,7 @@ cargo test --workspace                                   # 23
 python3 tests/mutants/run.py                             # 23 mutants, after a green baseline
 (cd tools && npm test)                                   # 161
 (cd tools && npm run build:programs && npm run e2e)      # a local validator: four releases, the whole cycle, the Pincer1 link
-(cd app && npm test && npm run build)                    # 34; then app/dist/heir/, with the signer's checks
+(cd app && npm test && npm run build)                    # 63; then app/dist/heir/, with the signer's checks
 (cd app && npm run e2e)                                  # the pages in a headless browser, on the same validator
 ```
 
