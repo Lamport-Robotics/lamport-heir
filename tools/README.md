@@ -68,5 +68,25 @@ npm run bundle                       # dist/lamport-heir.mjs, the tool as one fi
 ```
 
 The end-to-end run starts its own validator on port 18899 with the two `short-clocks` test builds,
-in which a day lasts one second, and takes four vaults through a release:
-`e2e/release.e2e.ts` describes them at the top.
+in which a day lasts one second. It takes four vaults through a release (`e2e/release.e2e.ts`
+describes them at the top), and then runs one whole cycle with the reminder service watching
+(`e2e/cycle.e2e.ts`), about six minutes together.
+
+## The cycle, and devnet
+
+```sh
+node scripts/cycle.ts --rpc URL --keypair FILE [--out report.json]   # arm, go quiet, warn, start, release, sweep, claim
+scripts/deploy-devnet.sh [--real]                                    # deploy a pair of programs to devnet, and check what landed
+```
+
+`scripts/cycle.ts` is milestone 4's gate as one script, for any cluster that has the test
+programs. [`../docs/devnet.md`](../docs/devnet.md) says what it does and what has been run.
+
+## The reminder service
+
+```sh
+node src/reminders/cli.ts help
+```
+
+Its own program, with its own dependencies (a mail library and a push library), and not part of
+the single file heirs download. [`../docs/reminders.md`](../docs/reminders.md).
