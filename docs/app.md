@@ -108,6 +108,7 @@ The sentences are in `app/src/heir-words.ts`, apart from the page, and tested as
 | terms in a request, and the check the signer makes | `app/test/terms.test.ts` | 9 |
 | the acceptance: format, envelope rule, refusals | `app/test/acceptance.test.ts` | 4 |
 | what the heirs' page says, phase by phase, and to the trusted contact | `app/test/heir-words.test.ts` | 14 |
+| the vault's own request code with this repository's module in its seam, as the signer is built | `app/test/signer-seam.test.ts` | 4 |
 
 The tests run with the same alias and constants as the build, so they see the SDK the way the
 built pages do.
