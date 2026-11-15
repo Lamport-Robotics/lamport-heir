@@ -1,0 +1,454 @@
+/**
+ * The pages, in a browser, from an empty wallet to an heir holding the vault's SOL.
+ *
+ * Everything under /heir/ is built as it is shipped (app/build.mjs), as a test build: for the
+ * `short-clocks` programs, in which a day lasts a second, and pointed at the local validator. A
+ * headless Chromium then does what an owner and an heir would do, by clicking:
+ *
+ *   owner   creates a vault; names an heir, and a second one kept private, whose salt is written
+ *           down before anything else happens; pastes back their acceptances; creates the plan;
+ *           makes a check-in key in the browser; signs the plan on this device
+ *   heir    opens the owner's link, signs the sentence, sends the line back
+ *   second  the heir kept private: their own link carries their salt; nothing on chain or on the
+ *           signer's screen shows their address; their kit prints the salt; the heirs' page knows
+ *           them by it
+ *   letter  the heir makes a reading key for the owner's wallet; the owner writes a letter, is
+ *           warned about what must not be in one, seals it and saves the file; the heir opens it,
+ *           a changed copy is refused, and it opens for nobody else
+ *   signer  the offline signer shows the heir by name for the real request, refuses a forged one,
+ *           and its signature for a changed plan is accepted by the chain
+ *   owner   checks in with the browser's key
+ *   contact the owner's trusted contact pushes the deadline back, once
+ *   heir    waits out the owner's silence, opens the waiting period, releases, collects
+ *
+ * What only a browser can show is tested here and nowhere else: that the bundler's aliases give
+ * the pages the Heir program's id, message and encoder, and that the three pages work together.
+ */
+import { execFileSync } from "node:child_process";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import { type AddressInfo } from "node:net";
+import { extname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { type Browser, chromium, type Page } from "playwright";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { RPC_URL } from "../../tools/e2e/validator.ts";
+
+const appDir = fileURLToPath(new URL("../", import.meta.url));
+const dist = join(appDir, "dist");
+const connection = new Connection(RPC_URL, "confirmed");
+const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".ttf": "font/ttf" };
+
+let server: Server;
+let browser: Browser;
+let base = "";
+
+/** the key a page keeps in sessionStorage for a local test wallet: its address, never its secret */
+async function addressOf(page: Page, storageKey: string): Promise<PublicKey> {
+  const bytes = await page.evaluate((k) => (JSON.parse(sessionStorage.getItem(k) ?? "[]") as number[]).slice(32), storageKey);
+  return new PublicKey(Uint8Array.from(bytes));
+}
+
+async function airdrop(to: PublicKey, sol: number): Promise<void> {
+  const signature = await connection.requestAirdrop(to, sol * LAMPORTS_PER_SOL);
+  await connection.confirmTransaction({ signature, ...(await connection.getLatestBlockhash()) });
+}
+
+/** presses the heirs' page's "Look it up" until `selector` shows: the chain's clock decides when */
+async function lookUpUntil(page: Page, selector: string, seconds: number): Promise<void> {
+  const deadline = Date.now() + seconds * 1000;
+  for (;;) {
+    await page.click("#sgo");
+    try { await page.waitForSelector(selector, { timeout: 4_000 }); return; } catch { /* not yet */ }
+    if (Date.now() > deadline) throw new Error(`${selector} did not appear within ${seconds} seconds; the page says: ${await page.locator("#spanel").innerText()}`);
+  }
+}
+
+beforeAll(async () => {
+  // the test build: the short-clocks programs, and the validator in place of devnet
+  execFileSync(process.execPath, ["build.mjs"], { cwd: appDir, env: { ...process.env, HEIR_CLOCK: "short", HEIR_RPC: RPC_URL }, stdio: "inherit" });
+  server = createServer((req, res) => {
+    const path = normalize(decodeURIComponent((req.url ?? "/").split(/[?#]/)[0]!)).replace(/^(\.\.[/\\])+/, "");
+    let file = join(dist, path);
+    if (existsSync(file) && statSync(file).isDirectory()) file = join(file, "index.html");
+    if (!file.startsWith(dist) || !existsSync(file)) { res.writeHead(404).end(); return; }
+    res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
+    createReadStream(file).pipe(res);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "localhost", resolve));
+  base = `http://localhost:${(server.address() as AddressInfo).port}`;
+  // the Chrome that is installed on the machine, in its headless mode: the browser people use, and
+  // nothing to download. HEIR_E2E_BROWSER names another channel ("chromium" for Playwright's own).
+  browser = await chromium.launch({ channel: process.env.HEIR_E2E_BROWSER ?? "chrome" });
+});
+
+afterAll(async () => {
+  await browser?.close();
+  await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
+});
+
+describe("the pages, in a browser, on a local validator", () => {
+  it("an owner names an heir and signs the plan; the heir accepts, and after the owner's silence collects the vault", async () => {
+    const context = await browser.newContext();
+    context.setDefaultTimeout(180_000); // deriving a vault key takes a browser many seconds, more on a loaded machine
+    const problems: string[] = [];
+    const watch = (page: Page, who: string) => page.on("pageerror", (e) => problems.push(`${who}: ${e.message}`));
+
+    // ── the owner: a wallet for fees, and a new vault ──
+    const owner = await context.newPage(); watch(owner, "owner");
+    await owner.goto(`${base}/heir/`);
+    expect(await owner.title()).toBe("Lamport Heir");
+    await owner.click("text=Connect wallet");
+    await owner.click('.wrow:has-text("Local test key")');
+    await owner.waitForSelector("#disc");
+    const ownerWallet = await addressOf(owner, "lamport-vault-local-payer");
+    await airdrop(ownerWallet, 5);
+
+    await owner.click("#new");
+    await owner.waitForSelector("#mk:not([disabled])");
+    const words = await owner.$$eval("#newbox .words > div", (cells) => cells.map((c) => (c.lastChild?.textContent ?? "").trim()).join(" "));
+    expect(words.split(" ")).toHaveLength(24);
+    await owner.click("#mk");
+    await owner.waitForFunction(() => location.hash.length > 30);
+    const vault = new PublicKey((await owner.evaluate(() => location.hash.slice(1))));
+    await owner.waitForSelector('.seg button[data-t="inheritance"]');
+    await owner.click('.seg button[data-t="inheritance"]');
+    await owner.waitForSelector("text=No plan. Nothing in this vault is released to anyone.");
+
+    // ── the heir: their own wallet, on their own page ──
+    const heir = await context.newPage(); watch(heir, "heir");
+    await heir.goto(`${base}/heir/claim.html`);
+    await heir.click("text=Connect wallet");
+    await heir.click("#wlocal");
+    await heir.waitForSelector("text=Disconnect");
+    const heirWallet = await addressOf(heir, "lamport-heir-local-heir");
+    await airdrop(heirWallet, 1);
+
+    // ── the owner's trusted contact: a third person, with a wallet of their own ──
+    const contact = await context.newPage(); watch(contact, "contact");
+    await contact.goto(`${base}/heir/claim.html`);
+    await contact.click("text=Connect wallet");
+    await contact.click("#wlocal");
+    await contact.waitForSelector("text=Disconnect");
+    const contactWallet = await addressOf(contact, "lamport-heir-local-heir");
+    expect(contactWallet.equals(heirWallet)).toBe(false);
+    await airdrop(contactWallet, 0.1);
+
+    // ── a second heir, whom the owner keeps private: a fourth person, with a wallet of their own ──
+    const second = await context.newPage(); watch(second, "second heir");
+    await second.goto(`${base}/heir/claim.html`);
+    await second.click("text=Connect wallet");
+    await second.click("#wlocal");
+    await second.waitForSelector("text=Disconnect");
+    const secondWallet = await addressOf(second, "lamport-heir-local-heir");
+    expect(secondWallet.equals(heirWallet) || secondWallet.equals(contactWallet)).toBe(false);
+
+    // ── the owner names the heirs; the private one's salt is written down before anything else happens ──
+    await owner.click('.switch button[data-m="hot"]');
+    await owner.fill("#hfirst", heirWallet.toBase58());
+    await owner.fill("#hsecond", heirWallet.toBase58());
+    await owner.click("#hprep");
+    await owner.waitForSelector("#hout .err");
+    expect(await owner.locator("#hout .err").innerText()).toMatch(/The second heir is the first heir/);
+    await owner.fill("#hsecond", secondWallet.toBase58());
+    await owner.check("#hsecondpriv");
+    await owner.click("#hprep");
+    await owner.waitForSelector('[data-salt="second"]');
+    expect(await owner.locator("#hcreate").count()).toBe(0);
+    const salt = (await owner.locator('[data-salt-text="second"]').innerText()).replace(/\s/g, "");
+    const fingerprint = (await owner.locator('[data-fingerprint="second"]').innerText()).replace(/\s/g, "");
+    expect(salt).toMatch(/^[0-9a-f]{64}-[0-9a-f]{4}$/);
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    await owner.fill('[data-slip="second"]', salt.slice(65) === "0000" ? "1111" : "0000");
+    await owner.click("#hslipgo");
+    await owner.waitForSelector("#hout .err:not(.hidden)");
+    expect(await owner.locator("#hcreate").count()).toBe(0); // not written down: nothing goes on
+    await owner.fill('[data-slip="second"]', salt.slice(65));
+    await owner.click("#hslipgo");
+
+    // ── nothing can be created before the heirs accept ──
+    await owner.waitForSelector("#hcreate");
+    expect(await owner.inputValue("#pclaim")).toBe("");
+    await owner.click("#hcreate");
+    await owner.waitForSelector("#hout .err:not(.hidden)");
+    expect(await owner.locator("#hout .err").innerText()).toMatch(/first heir has not accepted yet/);
+    const link = (await owner.locator('#hout [data-link="first"]').innerText()).trim();
+    expect(link).toContain("/heir/claim.html#accept=");
+    expect(link).not.toContain("salt");
+    const privateLink = (await owner.locator('#hout [data-link="second"]').innerText()).trim();
+    expect(privateLink).toContain(`&salt=${salt.slice(0, 64)}`); // their own link, and their salt in their own hands
+
+    // ── the heir accepts ──
+    await heir.goto(link);
+    await heir.waitForSelector("#asign");
+    expect(await heir.locator(".panel").innerText()).toMatch(/You are the first heir/);
+    expect(await heir.locator("dl.spec").innerText()).toContain(vault.toBase58());
+    await heir.click("#asign");
+    await heir.waitForSelector("#atext");
+    const acceptance = await heir.inputValue("#atext");
+    expect(JSON.parse(acceptance)).toMatchObject({ v: 1, heir: heirWallet.toBase58() });
+
+    // ── the heir kept private accepts through their own link, and is handed their salt ──
+    await contact.goto(privateLink); // somebody else with that link: the salt does not fit their wallet
+    await contact.waitForSelector(".panel .err");
+    expect(await contact.locator(".panel .err").innerText()).toMatch(/not the one it was made for/);
+    expect(await contact.locator("#asign").count()).toBe(0);
+    expect(await contact.locator("#asalt").count()).toBe(0);
+    await contact.goto(`${base}/heir/claim.html#${vault.toBase58()}`);
+    await second.goto(privateLink);
+    await second.waitForSelector("#asign");
+    expect(await second.locator(".panel").innerText()).toMatch(/You are the second heir[\s\S]*The plan keeps you private/);
+    expect(await second.locator("#asalttext").innerText()).toBe(salt);
+    expect(await second.locator("dl.spec").innerText()).not.toContain(secondWallet.toBase58());
+    await second.click("#asign");
+    await second.waitForSelector("#atext");
+    const acceptance2 = await second.inputValue("#atext");
+    expect(await second.locator("#ahow").innerText()).toMatch(/Send it to the owner and to nobody else/); // their line holds their address
+    expect(JSON.parse(acceptance2)).toMatchObject({ v: 1, heir: secondWallet.toBase58(), plan: JSON.parse(acceptance).plan });
+
+    // ── the owner creates the plan, makes a check-in key, and signs ──
+    const from = (who: PublicKey) => `#hout textarea[data-heir="${who.toBase58()}"]`;
+    await owner.fill(from(heirWallet), `${acceptance.slice(0, -4)}AAA"}`); // a damaged line is refused, and nothing is paid for
+    await owner.fill(from(secondWallet), acceptance2);
+    await owner.click("#hcreate");
+    await owner.waitForSelector("#hout .err:not(.hidden)");
+    await owner.fill(from(heirWallet), acceptance);
+    await owner.fill(from(secondWallet), acceptance); // the first heir's line in the private heir's place proves nothing about them
+    await owner.click("#hcreate");
+    await owner.waitForSelector("#hout .err:not(.hidden)");
+    expect(await owner.locator("#hout .err").innerText()).toMatch(new RegExp(`not by the address named here \\(${secondWallet.toBase58()}\\)`));
+    await owner.fill(from(secondWallet), acceptance2);
+    await owner.click("#hcreate");
+    await owner.waitForSelector("#hout .ok");
+    const plan = await owner.inputValue("#pclaim");
+    expect(plan).toBe(JSON.parse(acceptance).plan);
+    const planAccount = await connection.getAccountInfo(new PublicKey(plan));
+    expect(planAccount?.owner.toBase58()).toBe("HxMZSdKeFP2zJzhYUVNHefqEEz3B87EdTRjKwwPG6UhE");
+    // the chain holds the first heir's address and the second's fingerprint, and the second's address nowhere:
+    // not in the plan, and not in the transaction that made it
+    expect(planAccount!.data.includes(heirWallet.toBuffer())).toBe(true);
+    expect(planAccount!.data.includes(Buffer.from(fingerprint, "hex"))).toBe(true);
+    expect(planAccount!.data.includes(secondWallet.toBuffer())).toBe(false);
+    const [made] = await connection.getSignaturesForAddress(new PublicKey(plan));
+    const creation = await connection.getTransaction(made!.signature, { maxSupportedTransactionVersion: 0 });
+    const wire = Buffer.from(creation!.transaction.message.serialize());
+    expect(wire.includes(heirWallet.toBuffer())).toBe(true);
+    expect(wire.includes(secondWallet.toBuffer())).toBe(false);
+
+    await owner.click("#hmakekey");
+    await owner.click("#husekey");
+    const checkinKey = await owner.inputValue("#pcheckin");
+    expect(checkinKey.length).toBeGreaterThan(30);
+    await owner.fill("#pcontact", contactWallet.toBase58());
+    await owner.fill("#pwin", "90");
+    await owner.fill("#pwait", "30");
+    await owner.click("#pcheck");
+    await owner.waitForSelector("#pout dl");
+    const shown = await owner.locator("#pout dl").innerText();
+    expect(shown).toMatch(/a Lamport Heir plan/);
+    expect(shown).toContain(heirWallet.toBase58());
+    // of the heir kept private the summary shows the fingerprint the owner wrote down, and says it cannot say more
+    expect(shown).toContain(fingerprint);
+    expect(shown).toMatch(/NOT SHOWN/);
+    expect(shown).not.toContain(secondWallet.toBase58());
+    expect(shown).toMatch(new RegExp(`${contactWallet.toBase58()} · may push the deadline back by 90 days, once`));
+    expect(shown).toMatch(/TEST BUILD: one day lasts 1 second/);
+
+    await owner.fill("#hwords", words);
+    await owner.click("#hrun");
+    await owner.click("#cf-yes");
+    await owner.waitForSelector(".result");
+    expect(await owner.locator(".result").innerText()).toMatch(/SetSuccession · key 0 spent/);
+    await owner.waitForSelector("text=A plan is armed.");
+
+    // ── the private heir's kit carries their salt; the heirs' page knows them by it, and by nothing less ──
+    const [kit] = await Promise.all([context.waitForEvent("page"), owner.click(`#hkits [data-kit="${secondWallet.toBase58()}"]`)]);
+    await kit.waitForLoadState();
+    const printed = await kit.locator("body").innerText();
+    expect(printed).toContain("Your salt");
+    expect(printed.replace(/\s/g, "")).toContain(salt.replace("-", "").slice(0, 64));
+    expect(printed.replace(/\s/g, "")).toContain(fingerprint);
+    await kit.close();
+    await second.goto(`${base}/heir/claim.html#${vault.toBase58()}`);
+    await second.waitForSelector("#ssalt");
+    expect(await second.locator("#spanel").innerText()).toMatch(/keeps an heir private: if that is you, enter the salt printed on your kit/);
+    await second.fill("#ssalt", `${"0".repeat(63)}1`);
+    await second.click("#ssaltgo");
+    await second.waitForSelector("text=This wallet and this salt do not fit");
+    await second.click("#ssaltdrop");
+    await second.waitForSelector("#ssalt");
+    await second.fill("#ssalt", `${salt.slice(0, 20)}${salt[20] === "f" ? "e" : "f"}${salt.slice(21)}`); // one digit off: the check digits catch it
+    await second.click("#ssaltgo");
+    await second.waitForSelector("#ssalterr:not(.hidden)");
+    await second.fill("#ssalt", salt);
+    await second.click("#ssaltgo");
+    await second.waitForSelector("text=The plan keeps you private, and the salt you entered fits.");
+    expect(await second.locator("#spanel").innerText()).toMatch(/You are the second heir of this vault's plan/);
+    await heir.goto(`${base}/heir/claim.html#${vault.toBase58()}`); // the heir named openly is asked for no salt
+    await heir.waitForSelector("#spanel h3");
+    expect(await heir.locator("#ssalt").count()).toBe(0);
+
+    // ── a letter for the heir: a reading key, a sealed and signed file, and who can open it ──
+    await owner.waitForSelector("#llink");
+    const keyLink = (await owner.locator("#llink").innerText()).trim();
+    expect(keyLink).toBe(`${base}/heir/claim.html#letter=${plan}&from=${ownerWallet.toBase58()}`);
+    await heir.goto(keyLink);
+    await heir.waitForSelector("#lkmake");
+    expect(await heir.locator("#lkpanel").innerText()).toContain(ownerWallet.toBase58());
+    await heir.click("#lkmake");
+    await heir.waitForSelector("#lkline");
+    const readingKey = await heir.inputValue("#lkline");
+    expect(JSON.parse(readingKey)).toMatchObject({ v: 1, plan, writer: ownerWallet.toBase58(), heir: heirWallet.toBase58() });
+
+    const LETTER = "The deeds are with the notary on Elm Street.\nMy seed phrase is in the safe at home; Sam has the code.\n<b>Call Sam first.</b>";
+    const swapped = JSON.parse(readingKey); swapped.key = Buffer.from(new Uint8Array(32).fill(9)).toString("base64"); // somebody else's key, put in on the way
+    await owner.fill("#hletter textarea[data-reader]", JSON.stringify(swapped));
+    await owner.fill("#ltext", LETTER);
+    await owner.click("#lseal");
+    await owner.waitForSelector("#lerr:not(.hidden)");
+    expect(await owner.locator("#lerr").innerText()).toMatch(/first heir's reading key: What was signed is not the sentence that names this reading key/);
+    // the letter's words are not offered to a spelling service, which in some browsers is a server
+    expect(await owner.getAttribute("#ltext", "spellcheck")).toBe("false");
+    expect(await owner.getAttribute("#ltext", "autocomplete")).toBe("off");
+    await owner.fill("#hletter textarea[data-reader]", readingKey);
+    await owner.click("#lseal"); // the letter mentions a seed phrase: the owner is told, and nothing is sealed yet
+    await owner.waitForSelector("#lwarn:not(.hidden)");
+    expect(await owner.locator("#lwarn").innerText()).toMatch(/Say where such a thing is kept, never what it is/);
+    expect(await owner.locator("#lsealed").count()).toBe(0);
+    await owner.click("#lseal");
+    await owner.waitForSelector("#lsealed");
+    const [download] = await Promise.all([owner.waitForEvent("download"), owner.click("#lsave")]);
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^lamport-heir-letter-${plan.slice(0, 8)}-\\d{4}-\\d{2}-\\d{2}\\.json$`));
+    const sealedFile = readFileSync(await download.path(), "utf8");
+    expect(sealedFile).toBe(await owner.inputValue("#lfile"));
+    for (const word of ["notary", "Elm Street", "safe at home", "Sam"]) expect(sealedFile).not.toContain(word);
+
+    await heir.click("#navletter");
+    // the view the heir is leaving has a "Check the letter" button too: what tells the two apart is the key panel going
+    await heir.waitForSelector("#lkpanel", { state: "detached" });
+    await heir.waitForSelector("#lcheck");
+    const changed = JSON.parse(sealedFile); const inside = JSON.parse(changed.content); inside.sealedAt = "2031-01-01"; changed.content = JSON.stringify(inside);
+    await heir.fill("#lpaste", JSON.stringify(changed));
+    await heir.click("#lcheck");
+    await heir.waitForSelector("#lrerr:not(.hidden)");
+    expect(await heir.locator("#lrerr").innerText()).toMatch(/not signed by the wallet it names as its writer/);
+    expect(await heir.locator("#lopen").count()).toBe(0);
+    await heir.setInputFiles("#lfilein", { name: download.suggestedFilename(), mimeType: "application/json", buffer: Buffer.from(sealedFile) });
+    await heir.waitForSelector("#lopen");
+    expect(await heir.locator("#lwriter").innerText()).toBe(ownerWallet.toBase58());
+    expect(await heir.locator("#lcaveat").innerText()).toMatch(/It is the owner's only if it opens/);
+    await heir.click("#lopen");
+    await heir.waitForSelector("#lwords");
+    expect(await heir.locator("#lwords").evaluate((n) => n.textContent)).toBe(LETTER);
+    expect(await heir.locator("#lwords b").count()).toBe(0); // the letter's words are text on the page, never markup
+
+    await contact.click("#sletter"); // from where a vault stands: the way in on a phone, where the top navigation is not shown
+    await contact.waitForSelector("#lcheck");
+    await contact.fill("#lpaste", sealedFile);
+    await contact.click("#lcheck");
+    await contact.waitForSelector("#lnotyours");
+    expect(await contact.locator("#lopen").count()).toBe(0);
+
+    // ── the offline signer: who inherits, a forged request, and a signature the chain takes ──
+    await owner.click('.switch button[data-m="cold"]');
+    await owner.waitForSelector("#hout .ok"); // the heirs typed before come back, and their plan is found
+    await owner.fill("#pwait", "45");
+    await owner.click("#pcheck");
+    await owner.waitForSelector("#pout dl");
+    await owner.click("#mkreq");
+    await owner.waitForFunction(() => (document.querySelector("#reqtxt") as HTMLTextAreaElement).value.length > 100);
+    const request = await owner.inputValue("#reqtxt");
+    expect(JSON.parse(request).action).toMatchObject({ kind: "SetSuccession", claim: plan });
+
+    const signer = await context.newPage(); watch(signer, "signer");
+    await signer.goto(`${base}/heir/signer.html`);
+    expect(await signer.title()).toBe("Lamport Heir · cold signer");
+    // a request for a token with 255 decimals. the vault's signer used to fail while writing such an amount out, and
+    // was left holding a request it had shown nothing for. it writes the amount exactly, so there is a description
+    const TOKEN = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), ATA = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+    const mint = new PublicKey(new Uint8Array(32).fill(9));
+    const ata = PublicKey.findProgramAddressSync([heirWallet.toBuffer(), TOKEN.toBuffer(), mint.toBuffer()], ATA)[0];
+    const odd = { ...JSON.parse(request), action: { kind: "TransferToken", mint: mint.toBase58(), to: ata.toBase58(), toOwner: heirWallet.toBase58(), amount: "123456", tokenProgram: TOKEN.toBase58(), decimals: 255 } };
+    await signer.fill("#req", JSON.stringify(odd));
+    await signer.waitForSelector("#reqview dl");
+    expect(await signer.locator("#reqview .err").count()).toBe(0);
+    expect((await signer.locator("#reqview dl").innerText()).replace(/\s/g, "")).toMatch(/0\.0{249}123456/);
+
+    const forged = JSON.parse(request);
+    forged.action.terms.primary.address = ownerWallet.toBase58(); // the heirs shown would be someone else's
+    await signer.fill("#req", JSON.stringify(forged));
+    await signer.waitForSelector("#reqview .err");
+    expect(await signer.locator("#reqview .err").innerText()).toMatch(/give the plan address .* but the request releases to/);
+    expect(await signer.locator("#reqview dl").count()).toBe(0);
+    await signer.fill("#words", words);
+    await signer.click("#sign");
+    await signer.waitForSelector("#err:not(.hidden)");
+    expect(await signer.locator("#err").innerText()).toMatch(/paste a valid request first/);
+
+    await signer.fill("#req", request);
+    await signer.waitForSelector("#reqview dl");
+    const onSigner = await signer.locator("#reqview dl").innerText();
+    expect(onSigner).toMatch(/set the inheritance plan of this vault/);
+    expect(onSigner).not.toMatch(/close the vault/);
+    expect(onSigner).toMatch(/a Lamport Heir plan/);
+    expect(onSigner).toContain(heirWallet.toBase58());
+    expect(onSigner).toMatch(/NOT SHOWN/); // the signer does not pretend to know who the private heir is
+    expect(onSigner).toContain(fingerprint); // and shows what the owner wrote down, to compare
+    expect(onSigner).not.toContain(secondWallet.toBase58());
+    expect(onSigner).toMatch(/45 days\./);
+    await signer.fill("#words", words);
+    await signer.click("#sign");
+    await signer.waitForSelector("#out:not(.hidden)");
+    const signature = await signer.inputValue("#sig");
+    expect(await signer.inputValue("#words")).toBe(""); // the words are gone from the page once used
+
+    await owner.fill("#sigtxt", signature);
+    await owner.click("#run");
+    await owner.waitForSelector("text=/SetSuccession · key [1-9]\\d* spent/");
+    await owner.waitForFunction(() => [...document.querySelectorAll(".seg + div dl.spec dd")].some((d) => d.textContent === "45 days"));
+
+    // ── a check-in, with the key this browser made ──
+    await owner.click("#hfund");
+    await owner.click("#hcheckinnow");
+    await owner.waitForFunction(() => { const dt = [...document.querySelectorAll(".seg + div dl.spec dt")].find((d) => d.textContent === "Last check-in"); return !!dt && dt.nextElementSibling?.textContent !== "none"; });
+
+    // ── the trusted contact uses their one extension; the heir is offered no such thing ──
+    await contact.goto(`${base}/heir/claim.html#${vault.toBase58()}`);
+    await contact.waitForSelector("#scontact");
+    expect(await contact.locator("#scontact").innerText()).toMatch(/You are this vault's trusted contact/);
+    await contact.click("#sextend");
+    await contact.waitForSelector("text=you have used your extension");
+    expect(await contact.locator("#sextend").count()).toBe(0);
+    await owner.reload();
+    await owner.click('.seg button[data-t="inheritance"]');
+    await owner.waitForSelector("text=extension used");
+
+    // ── the owner goes quiet; something worth inheriting arrives in the vault ──
+    await airdrop(vault, 2);
+    const before = await connection.getBalance(heirWallet);
+    await heir.goto(`${base}/heir/claim.html#${vault.toBase58()}`);
+    await heir.waitForSelector("#spanel h3");
+    expect(await heir.locator("#spanel").innerText()).toMatch(/You are the first heir of this vault's plan/);
+    expect(await heir.locator("#sstart").count()).toBe(0); // within the owner's time there is nothing to press
+    expect(await heir.locator("#scontact").count()).toBe(0);
+
+    await lookUpUntil(heir, "#sstart", 480); // the window, and the contact's 90 days on top
+    await heir.click("#sstart");
+    expect(await heir.locator("#spanel .notice.warn").innerText()).toMatch(/only if you believe the owner has died/);
+    expect(await heir.locator("#sstartprivate").innerText()).toMatch(/ties your wallet to the vault/); // said to whoever opens it, since the plan keeps an heir private
+    await heir.click("#sstartyes");
+    await heir.waitForSelector("text=The waiting period is running.");
+
+    await lookUpUntil(heir, "#scollect", 180);
+    await heir.click("#scollect");
+    await heir.waitForSelector("#sdone:not(.hidden)");
+    expect(await heir.locator("#sdone").innerText()).toMatch(/Collected, as the first heir/);
+    expect(await heir.locator("#ssteps").innerText()).toMatch(/Release the vault[\s\S]*Withdraw the SOL/);
+
+    // the vault's 2 SOL, and its rent, are in the heir's wallet; the fees of claiming came out of it
+    expect((await connection.getBalance(heirWallet)) - before).toBeGreaterThan(1.99 * LAMPORTS_PER_SOL);
+    expect(problems).toEqual([]);
+    await context.close();
+  });
+});

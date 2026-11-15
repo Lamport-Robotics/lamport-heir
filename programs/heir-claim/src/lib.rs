@@ -25,20 +25,19 @@ pub mod tombstone;
 pub use error::ClaimError;
 pub use state::{heir_commitment, HeirRef, Plan, Terms, DAY_SECS, HEIR_DOMAIN, MAX_CONTINGENT_DELAY_SECS, MIN_CONTINGENT_DELAY_SECS, PLAN_SEED, TERMS_DOMAIN};
 
-// Placeholder ids with no private key (docs/program-ids.md). Local tests load the program at them.
+// docs/program-ids.md lists the ids and what is deployed at them. Local tests load the program here too.
 #[cfg(not(feature = "short-clocks"))]
-declare_id!("2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd");
+declare_id!("cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW");
 // The `short-clocks` test build is a different program: its own id, and its own vault program.
 #[cfg(feature = "short-clocks")]
-declare_id!("HzoHmRyCtxv8nd9u9NpnLTJcJssGJvyvbjeWBY7BMXPD");
+declare_id!("HxMZSdKeFP2zJzhYUVNHefqEEz3B87EdTRjKwwPG6UhE");
 
 /// The Heir-enabled vault program: the only program whose tombstones `activate` believes.
-/// Placeholder id with no private key until the program is deployed (docs/program-ids.md).
 #[cfg(not(feature = "short-clocks"))]
-pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("HK1QPbqjkozJHB74QuGaduYzAtqBe9hry3nV64LmpCsb");
+pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("3mJU9ozZByXsHavMGfzdwDLFs9YuFaMA3jabaLwczxAV");
 /// The vault's `short-clocks` test build: the only vault program this test build believes.
 #[cfg(feature = "short-clocks")]
-pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("DGe6SeUVApXcN7j3X613SeTmazXGqtAuFSn7RQWBiDDS");
+pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("3pwH161r4SZRH6nCHY4RUm7gk2NZqypyFJaUgv9a2duG");
 
 fn is_token_program(key: &Pubkey) -> bool {
     *key == anchor_spl::token::ID || *key == anchor_spl::token_2022::ID

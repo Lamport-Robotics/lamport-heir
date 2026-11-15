@@ -9,8 +9,8 @@
  * written, logged or sent anywhere.
  */
 import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { PublicKey, type Signer } from "@solana/web3.js";
-import { type Chain, clusterTime, COMMITMENT } from "./chain.ts";
+import { PublicKey } from "@solana/web3.js";
+import { type AnySigner, type Chain, clusterTime, COMMITMENT } from "./chain.ts";
 import { claimRole, claimSolInstruction, claimTokenInstruction, heirMatches, PLAN_ACCOUNT_SIZE } from "./claim.ts";
 import { attemptStep, describeStep, finish, inspect, type Situation, type Step } from "./release.ts";
 import { harvestInstruction, holdingsOf, hookAccounts, type MintFacts, mintFacts } from "./tokens.ts";
@@ -49,7 +49,7 @@ const COMPUTE_UNITS = 400_000;
  * Tokens the cluster refuses to move are reported in `steps` with the reason, and the rest are
  * claimed regardless.
  */
-export async function claim(chain: Chain, heir: Signer, address: PublicKey, opts: ClaimOptions = {}): Promise<{ situation: Situation; steps: Step[]; verdict: ClaimVerdict }> {
+export async function claim(chain: Chain, heir: AnySigner, address: PublicKey, opts: ClaimOptions = {}): Promise<{ situation: Situation; steps: Step[]; verdict: ClaimVerdict }> {
   // First, without spending anything: is this key the one the vault's owner named?
   const before = await inspect(chain, address);
   if (before.plan) {

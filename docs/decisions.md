@@ -136,8 +136,9 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   with the `short-clocks` test builds (`tools/e2e/`). Decision 5 said so in advance.
 - **The claim program has a `short-clocks` test build** with its own program id, which believes
   only the vault's `short-clocks` build.
-- **lamport-vault is a submodule at `vendor/lamport-vault`**, pinned to the head of
-  lamport-vault#5. The tools use its SDK and the tests build its program.
+- **lamport-vault is a submodule at `vendor/lamport-vault`**, pinned to one commit of its `main`
+  (first to the head of lamport-vault#5, then to `main` once that merged). The tools use its SDK
+  and the tests build its program.
 - **TypeScript is run directly by Node.js 22.18 or later**, with no build step, as the vault's SDK
   scripts are. Dependencies beyond the vault SDK: `@solana/web3.js`, `@solana/spl-token`,
   `@noble/hashes`, `qrcode`; for development `typescript`, `vitest`, `esbuild`.
@@ -168,6 +169,82 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
 - **The mutation check now proves its baseline.** It first requires the untouched program to pass
   every test. Without that, a broken machine would "catch" every mutant.
 
+## Milestone 4, the app and the reminders (in progress)
+
+- **No plan interview and no AI heir guide in v1.** The spec has a language model explain the
+  choices, propose values and guide heirs. On 2026-11-13 the project owner asked whether the
+  interview was needed, and the answer was no: the form has five choices with sensible defaults,
+  and fixed explanatory text beside each field does the explaining. Leaving the model out removes
+  an API key, a running cost, a server that would have to hold the key, and the only place a model
+  touches the flow. `tools/src/plan/assistant.ts` (a model may only propose durations and privacy
+  switches, the owner accepts each field, a reply that asks for a secret is withheld) stays in the
+  repository, tested and unused, so that adding an assistant later starts from the guard.
+- **The vault's cold signer is not changed.** A Heir-enabled vault belongs to another program, so
+  the vault page and its signer have to know that program's id and how to show a `SetSuccession`
+  before an owner can use such a vault at all. That is done as a second build of the same source,
+  the way the program itself is a second build: the existing page and `signer.html` come out
+  byte for byte as they are today, and the Heir build is a separate file with its own hash
+  (lamport-vault#7; [`app.md`](app.md)). The project owner said to go ahead with it on 2026-11-13.
+- **The offline signer checks who inherits, not only where the vault releases to.** The spec has
+  the owner sign a `SetSuccession` that names a claim address. A plan's address is a hash of its
+  heirs, so the request carries the heirs and the signer derives the address again; a request
+  whose heirs do not give its address is refused. Without this the one screen the owner can trust
+  would show them 32 bytes.
+- **Heirs accept by signing a sentence, sent back as a line of text.** The spec lists "heir
+  proofs" and leaves the route open. No server sits between owner and heir: the owner sends a
+  link, the heir's page signs, the heir sends one line back by any means, and the owner's page and
+  then the claim program check it.
+- **A private heir's salt is on the owner's paper and in the heir's hands before the plan can be
+  armed.** A hashed heir collects with their salt, and a salt that is lost is an heir who can
+  never collect. So the owner's page makes it only on the owner's own press, will not go on
+  until the owner has written it down (they type its check digits), and puts it in that heir's
+  own accept link, so the heir holds it before the plan exists. The kit prints it again. The
+  browser keeps a copy to find the plan and print the kit, which the page treats as a
+  convenience: it reads it back before every step that commits to the plan, and tells the owner
+  that a browser can lose it. Their acceptance is checked in the owner's page and not on chain,
+  where it would publish the address, and it is asked for even when the plan's account already
+  exists, since anyone can create one ([`app.md`](app.md)). Earlier this was left to "the
+  command-line tools", which had no command for it.
+- **The tools sign with a wallet as well as with a key file**, so the heirs' page runs the same
+  `start` and `claim` as the command-line tool rather than a second implementation.
+- **The check-in key pays its own fee.** The spec lets Lamport pay the fee of a check-in. A fee
+  relay is a funded key on a server and one more thing that has to stay up. A check-in costs
+  0.000005 SOL, so the owner sends the check-in key's address a few cents of SOL when they arm,
+  and checking in needs nobody else.
+- **The family letter is encrypted to a key each heir derives from a signature.** The spec says
+  "encrypted on the owner's device to the heirs' keys". A wallet signs messages but does not
+  decrypt them, so an heir's reading key is derived from their signature over a fixed sentence
+  (Ed25519 signatures are deterministic, so the same wallet makes the same key again years
+  later; the page asks twice and refuses a wallet that does not), and the heir gives the owner
+  the public half, signed with their own key. X25519, HKDF-SHA-256 and AES-256-GCM; the letter's
+  key is wrapped once per heir. The sentence says the signature is a private key and where to
+  sign it. Before a letter is sealed it is checked for anything that reads like a seed phrase or
+  a key.
+- **A letter is signed by its writer, and a reading key opens one writer's letters only.** The
+  spec does not say how an heir knows a letter is the owner's, and anyone can encrypt to a public
+  key. So the owner's wallet signs each letter, and the sentence a reading key is made from names
+  that wallet: a letter from anyone else either fails the signature or asks the heir's wallet for
+  a key nobody encrypted to. The vault itself cannot sign a letter (its keys are one-time and
+  spend the vault's own signatures), so the writer is the wallet the owner pays fees with, fixed
+  at the moment the heirs make their keys ([`app.md`](app.md)).
+- **The letter is a file, and no server holds it.** The spec has the service keep the
+  ciphertext. There is no service address yet, and a file the owner hands over or keeps with
+  their papers needs none: it can be read with the page or with the command-line tool, whether
+  or not Lamport exists. The cost is said on the page: an heir who has the file reads it at
+  once, not only after a release.
+- **Push needs no provider.** Web Push is sent with a key pair the service makes for itself.
+  Email needs a sending account, which is the project owner's to open. Email goes over SMTP, so
+  any account will do; the libraries are `nodemailer` and `web-push`, with `smtp-server` in the
+  tests ([`reminders.md`](reminders.md)).
+- **No public sign-up yet.** Subscriptions are added by whoever runs the service. A sign-up form
+  has to confirm an email address before the service writes to it, and that needs the email
+  account first.
+- **The gate's cycle is one script for every cluster** (`tools/scripts/cycle.ts`): CI runs it on
+  a local validator, and the same file is what runs on devnet ([`devnet.md`](devnet.md)).
+- **A change of plan is announced to every channel and every trusted contact**, with what changed
+  and the soonest a release could now happen. With no on-chain queue (decision 2), this alarm is
+  what stands in front of a forced change.
+
 ## From the project owner
 
 - **2026-11-13: Heir's app is a page of the vault site, `vault.lamportrobotics.com/heir`**, not a
@@ -175,9 +252,21 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   record of which one-time signing keys have been used, and the check-in key it keeps in the
   browser belongs to that origin.
 
+- **2026-11-14: no devnet test run before merging.** The spec's gate for milestone 4 is one whole
+  cycle on devnet with short durations. Asked for the test SOL it needs, the owner answered "we
+  dont need a dev test it will be fine". Milestones 4 to 6 were merged on the cycle's runs
+  against a local validator, which CI repeats on every push. The cycle has not run on devnet,
+  and [`devnet.md`](devnet.md) says so.
+- **2026-11-14: the fix for the vault's own cold signer is published** (lamport-vault#10), on the
+  owner's word. It was found by the review of the signer's Heir build and held back until then.
+
 ## Still the project owner's
 
-- Devnet keypairs and devnet deployment (milestone 4).
+- Test SOL for the devnet deployment of the pair the pages talk to. The keys exist (2026-11-13,
+  with the owner's word) and the ids are in the source, but devnet's command-line faucet is
+  closed and its web faucet does not serve automated clients: about 5 SOL has to be requested by
+  a person. Until then nothing is deployed and the pages are served nowhere.
 - Anything on mainnet, and any real funds.
 - Counsel on estates, money transmission and wording, before anyone outside is told to rely on this.
-- Merging. The builder opens draft pull requests and does not merge them.
+- Merging, except where the owner has said otherwise: on 2026-11-13 he told the builder to review
+  and merge Heir's own pull requests once their checks pass.

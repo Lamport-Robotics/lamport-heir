@@ -24,8 +24,8 @@ import {
   sweepClosedSolInstruction,
   TOMBSTONE_ACCOUNT_SIZE,
 } from "@lamport-robotics/vault";
-import { PublicKey, type Signer, SystemProgram, type TransactionInstruction } from "@solana/web3.js";
-import { type Chain, clusterTime, COMMITMENT, reasonFromLogs, send, simulate } from "./chain.ts";
+import { PublicKey, SystemProgram, type TransactionInstruction } from "@solana/web3.js";
+import { type AnySigner, type Chain, clusterTime, COMMITMENT, reasonFromLogs, send, simulate } from "./chain.ts";
 import { activateInstruction, decodePlan, isPlan, type PlanAccount } from "./claim.ts";
 import { type Programs, programsForClaimProgram, programsForVaultProgram } from "./programs.ts";
 import { harvestInstruction, type Holding, holdingsOf, hookAccounts, type MintFacts, mintFacts } from "./tokens.ts";
@@ -151,7 +151,7 @@ const MAX_CLOSED_IN_RELEASE = 12;
 /** Compute budget for a transaction that may create a token account, move tokens through extensions, and close. */
 const SWEEP_COMPUTE_UNITS = 400_000;
 
-async function attempt(chain: Chain, payer: Signer, extraSigners: Signer[], instructions: TransactionInstruction[], step: Step, opts: { dryRun?: boolean | undefined; computeUnits?: number }): Promise<Step> {
+async function attempt(chain: Chain, payer: AnySigner, extraSigners: AnySigner[], instructions: TransactionInstruction[], step: Step, opts: { dryRun?: boolean | undefined; computeUnits?: number }): Promise<Step> {
   const sim = await simulate(chain, payer.publicKey, instructions, opts.computeUnits);
   if (!sim.ok) return { ...step, failed: reasonFromLogs(sim.logs) ?? sim.error ?? "the cluster refused it" };
   if (opts.dryRun) return { ...step, wouldSend: true };
@@ -177,7 +177,7 @@ export { describe as describeStep };
  * This is the one step that is a person's decision ("I believe the owner is gone"), which is why
  * it is its own call and {@link finish} never makes it.
  */
-export async function start(chain: Chain, payer: Signer, vault: PublicKey, opts: { dryRun?: boolean } = {}): Promise<{ situation: Situation; step: Step }> {
+export async function start(chain: Chain, payer: AnySigner, vault: PublicKey, opts: { dryRun?: boolean } = {}): Promise<{ situation: Situation; step: Step }> {
   const situation = await inspect(chain, vault);
   const step: Step = { kind: "start_succession" };
   if (situation.state !== "open") return { situation, step: { ...step, skipped: "the vault has already been released" } };
@@ -206,7 +206,7 @@ export async function start(chain: Chain, payer: Signer, vault: PublicKey, opts:
  * For a vault that is not ready (no plan, the owner active, a waiting period still running) it
  * does nothing and says so in `situation`.
  */
-export async function finish(chain: Chain, payer: Signer, address: PublicKey, opts: FinishOptions = {}): Promise<{ situation: Situation; steps: Step[] }> {
+export async function finish(chain: Chain, payer: AnySigner, address: PublicKey, opts: FinishOptions = {}): Promise<{ situation: Situation; steps: Step[] }> {
   const steps: Step[] = [];
   const record = (s: Step) => {
     steps.push(s);

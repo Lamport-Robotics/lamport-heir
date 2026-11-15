@@ -87,15 +87,31 @@ export class TransactionFailed extends Error {
 }
 
 /**
+ * A wallet that signs a transaction itself, such as a browser or hardware wallet. Its key never
+ * comes here: the tools hand it the transaction and get it back signed.
+ */
+export interface WalletSigner {
+  publicKey: PublicKey;
+  signTransaction(transaction: Transaction): Promise<Transaction>;
+}
+
+/** Whoever signs: a key file read by the command-line tool, or a wallet. */
+export type AnySigner = Signer | WalletSigner;
+
+const isWallet = (s: AnySigner): s is WalletSigner => typeof (s as Partial<WalletSigner>).signTransaction === "function";
+
+/**
  * Signs `instructions` as one transaction (the first signer pays), sends it and waits for it to
  * confirm. Throws {@link TransactionFailed} if the cluster refuses it.
  */
-export async function send(chain: Chain, signers: Signer[], instructions: TransactionInstruction[], computeUnits?: number): Promise<string> {
+export async function send(chain: Chain, signers: AnySigner[], instructions: TransactionInstruction[], computeUnits?: number): Promise<string> {
   const payer = signers[0];
   if (!payer) throw new Error("at least one signer is required");
   const { blockhash, lastValidBlockHeight } = await chain.getLatestBlockhash(COMMITMENT);
-  const tx = new Transaction({ feePayer: payer.publicKey, blockhash, lastValidBlockHeight }).add(...withBudget(instructions, computeUnits));
-  tx.sign(...signers);
+  let tx = new Transaction({ feePayer: payer.publicKey, blockhash, lastValidBlockHeight }).add(...withBudget(instructions, computeUnits));
+  const keys = signers.filter((s): s is Signer => !isWallet(s));
+  if (keys.length > 0) tx.partialSign(...keys);
+  for (const wallet of signers.filter(isWallet)) tx = await wallet.signTransaction(tx);
   let signature: string;
   try {
     signature = await chain.sendRawTransaction(tx.serialize(), { preflightCommitment: COMMITMENT });

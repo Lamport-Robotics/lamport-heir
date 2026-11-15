@@ -38,11 +38,11 @@ describe("reasonFromLogs", () => {
 
   it("puts a token program's error number into words", () => {
     const refused = (code: string) => [
-      "Program DGe6SeUVApXcN7j3X613SeTmazXGqtAuFSn7RQWBiDDS invoke [1]",
+      "Program 3pwH161r4SZRH6nCHY4RUm7gk2NZqypyFJaUgv9a2duG invoke [1]",
       "Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [2]",
       "Program log: Instruction: TransferChecked",
       `Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: custom program error: ${code}`,
-      `Program DGe6SeUVApXcN7j3X613SeTmazXGqtAuFSn7RQWBiDDS failed: custom program error: ${code}`,
+      `Program 3pwH161r4SZRH6nCHY4RUm7gk2NZqypyFJaUgv9a2duG failed: custom program error: ${code}`,
     ];
     expect(reasonFromLogs(refused("0x25"))).toBe("this token is non-transferable: nobody can move it (token program error 0x25)");
     expect(reasonFromLogs(refused("0x11"))).toMatch(/frozen/);
@@ -52,7 +52,7 @@ describe("reasonFromLogs", () => {
     // a number it has no words for is passed on as it is
     expect(reasonFromLogs(refused("0x2a"))).toBe("custom program error: 0x2a");
     // the same number from another program means something else, and is not translated
-    expect(reasonFromLogs(["Program DGe6SeUVApXcN7j3X613SeTmazXGqtAuFSn7RQWBiDDS failed: custom program error: 0x25"])).toBe("custom program error: 0x25");
+    expect(reasonFromLogs(["Program 3pwH161r4SZRH6nCHY4RUm7gk2NZqypyFJaUgv9a2duG failed: custom program error: 0x25"])).toBe("custom program error: 0x25");
   });
 
   it("then the bare failure line, and nothing when there is none", () => {

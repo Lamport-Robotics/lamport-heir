@@ -24,9 +24,9 @@ pub fn hashv(parts: &[&[u8]]) -> [u8; 32] {
 }
 
 /// `declare_id!` of `programs/heir-claim`.
-pub const CLAIM_PROGRAM_ID: Pubkey = Address::from_str_const("2SbWfdn3N5LqZz4nwcJuUkD9DhPDJyMusSNqyWaUWUDd");
+pub const CLAIM_PROGRAM_ID: Pubkey = Address::from_str_const("cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW");
 /// `VAULT_PROGRAM_ID` of `programs/heir-claim`: the Heir-enabled vault program.
-pub const VAULT_PROGRAM_ID: Pubkey = Address::from_str_const("HK1QPbqjkozJHB74QuGaduYzAtqBe9hry3nV64LmpCsb");
+pub const VAULT_PROGRAM_ID: Pubkey = Address::from_str_const("3mJU9ozZByXsHavMGfzdwDLFs9YuFaMA3jabaLwczxAV");
 pub const SYSTEM_PROGRAM_ID: Pubkey = Address::from_str_const("11111111111111111111111111111111");
 pub const TOKEN_PROGRAM_ID: Pubkey = Address::from_str_const("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 pub const TOKEN_2022_PROGRAM_ID: Pubkey = Address::from_str_const("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");

@@ -85,7 +85,7 @@ export class FakeChain implements Chain {
     return { blockhash: SystemProgram.programId.toBase58(), lastValidBlockHeight: 1 };
   }
 
-  async sendRawTransaction(): Promise<string> {
+  async sendRawTransaction(_raw?: Buffer | Uint8Array | number[]): Promise<string> {
     this.sends += 1;
     throw new Error("the fake chain executes nothing: a test reached a send it should not have");
   }
