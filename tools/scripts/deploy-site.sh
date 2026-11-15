@@ -76,8 +76,9 @@ say "copying"
 stamp="$(date -u +%Y%m%d-%H%M%S)"
 # what is there now is kept beside the site, so that going back is one copy
 ssh -o BatchMode=yes "$host" "if [ -d '$site_dir/heir' ]; then mkdir -p '$site_dir/../backups' && cp -a '$site_dir/heir' '$site_dir/../backups/heir-$stamp' && echo 'kept the old pages as backups/heir-$stamp'; fi"
-rsync -rlc --delete --chmod=D2775,F664 "$dist/" "$host:$site_dir/heir/"
-ssh -o BatchMode=yes "$host" "printf '%s\n' '$commit' > '$site_dir/heir/COMMIT'"
+# no --chmod here: the rsync that ships with macOS does not take one
+rsync -rlc --delete "$dist/" "$host:$site_dir/heir/"
+ssh -o BatchMode=yes "$host" "find '$site_dir/heir' -type d -exec chmod 2775 {} + && find '$site_dir/heir' -type f -exec chmod 664 {} + && printf '%s\n' '$commit' > '$site_dir/heir/COMMIT'"
 
 say "what is served at $site_url/heir/"
 failed=0
