@@ -88,3 +88,41 @@ The run cost the paying key 0.0082 SOL.
 ### On devnet
 
 Not run yet.
+
+## Putting the pages on the site
+
+The pages are static files, served under `/heir/` on the vault's site (lamport-vault,
+`web/README.md`: a directory behind Caddy). `tools/scripts/deploy-site.sh` builds them, copies
+`app/dist/heir/` into the site's `heir/` folder and nothing else, and then fetches every file
+back over HTTPS and compares it with the build:
+
+```sh
+cd tools
+HEIR_SITE_HOST=<the ssh host the site is on> scripts/deploy-site.sh          # checks, and shows what would change
+HEIR_SITE_HOST=<the ssh host the site is on> scripts/deploy-site.sh --go     # copies
+```
+
+It refuses a test build, a tree with changes in no commit, and **pages for programs that are not
+on the cluster**: the real pair has to be deployed first (`scripts/deploy-devnet.sh --real`). What
+was there before is kept in the site's `backups/` folder.
+
+The cold signer carries its script inline, by design: it is one file that works with no network.
+The site's policy for pages allows scripts from the site only, so `/heir/signer.html` needs the
+policy the vault's own signer has. In the site's Caddyfile, in the block for the vault's host:
+
+```
+  # was: @app not path /signer.html
+  @app not path /signer.html /heir/signer.html
+
+  # beside the vault signer's own lines: the same policy, and a name of its own for the download
+  @heirsigner path /heir/signer.html
+  header @heirsigner Content-Security-Policy `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:; connect-src 'none'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'`
+  header @heirsigner Content-Disposition "attachment; filename=lamport-heir-signer.html"
+  header @heirsigner Cache-Control "no-store"
+```
+
+Then `caddy validate` and `caddy reload`. The script's last check fails until this is in place.
+The signer's own page also carries a stricter policy inside the file, with the hash of its one
+script, so the header above only has to let that script run.
+
+**Published: nothing yet.** It waits for the programs.
