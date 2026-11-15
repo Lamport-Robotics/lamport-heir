@@ -52,7 +52,7 @@ node tools/scripts/build-programs.mjs     # needs Agave 2.3.x; platform-tools v1
 
 | build | hash |
 |---|---|
-| lamport-vault, default features, `solana-verify` 0.5.2 in the image `verify.yml` pins | `b9c055c3ba267849970076a5689e068a19f05dd4045f8f49f16f05cf2e2a563b` (unchanged by this work; in lamport-vault `docs/VERIFY.md`) |
+| lamport-vault, default features, `solana-verify` 0.5.2 in the image `verify.yml` pins | `b9c055c3ba267849970076a5689e068a19f05dd4045f8f49f16f05cf2e2a563b` up to lamport-vault#8 (unchanged by the Heir work; in lamport-vault `docs/VERIFY.md`). #8 changes the vault's token transfers on purpose, for transfer hooks, and with it this hash; the new one is printed by `verify.yml` once #8 is on `main` |
 | lamport-vault with `succession`, same image | printed by the `succession build` job of lamport-vault's `succession.yml` for each commit |
 | `heir-claim` | printed by this repository's `both programs in litesvm` job |
 
@@ -94,6 +94,7 @@ removes or weakens that rule and requires a test to notice (`tests/mutants/` in 
 | C6 | The plan keeps its own rent and is never closed | `claim_sol` tests; mutant "claim_sol takes the rent too" |
 | C7 | Before a release, a plan is created only when every heir named by address proved control | `plan.rs`; mutant "heirs need not prove control" |
 | C8 | A proof of control is for one plan and cannot be replayed for another | the signed text names the plan's address; `a_signed_message_must_be_by_the_heir_over_this_plan`; `an_ed25519_entry_that_points_at_another_instruction_proves_nothing` |
+| C10 | A token with a Token-2022 transfer hook can be claimed, and `claim_token` passes nobody's signature on to the hook: not the heir's, who signs and pays, nor the plan's | `tests/svm/tests/hook.rs` (17 tests): the claim against a real hook program; `the_claim_program_hands_the_token_program_no_signature_but_the_plans` reads the call with a recorder in the token program's place; a hook that reaches for the heir's SOL gets nothing; five mutants |
 | C9 | After a vault has released to a plan's address, that plan can still be created, by anyone, and only that plan | `a_plan_can_still_be_created_after_its_vault_released_to_it`; `a_released_vault_lets_only_the_plan_it_named_be_created`; `release.rs`; mutants |
 
 ### The signer and the pages
@@ -186,12 +187,15 @@ Stated plainly, so that nobody finds them by surprise.
    it; nothing on chain does.
 2. **A ring of three or more vaults naming each other** would trap a release among their
    tombstones. The program refuses a ring of two.
-3. **Tokens of a mint with a Token-2022 transfer hook are not moved.** They are reported and stay
-   where they are. A fix for the vault's own transfers is open as
-   [lamport-vault#8](https://github.com/Lamport-Robotics/lamport-vault/pull/8): it changes the
-   vault program itself, so it is the project owner's to merge and deploy. It hands a hook's
-   accounts to the token program and never passes anybody's signature on. `heir-claim`'s
-   `claim_token` has the same gap and gets the same change once that one is on `main`.
+3. **Some tokens with a Token-2022 transfer hook stay where they are.** Both programs hand a
+   hook's accounts to the token program and never pass anybody's signature on
+   ([lamport-vault#8](https://github.com/Lamport-Robotics/lamport-vault/pull/8) for the vault, and
+   the same call in `claim_token`; [`../claim-program.md`](../claim-program.md), "Tokens with a
+   transfer hook"). So a token whose hook refuses, or cannot do without a signature, does not
+   move, and the tools decline to build a transfer whose hook lists a key that signs the
+   transaction. Such tokens are reported and hold nothing else back. Which accounts a hook is
+   given is decided by whoever sends the transaction and by the token program, not by an LMS
+   signature. The end-to-end run on a validator has no hook token in it.
 4. **Non-transferable, frozen and paused tokens** stay until their issuer lets them move, or for
    ever. They hold nothing else back.
 5. **The acceptance message is accepted inside an off-chain message envelope that is not parsed**,
@@ -399,9 +403,10 @@ with a salt through the page (limit 10).
 
 ```sh
 cargo test --workspace                                   # 23
-(cd tests/svm && cargo test)                             # 49, both programs in LiteSVM
-python3 tests/mutants/run.py                             # 23 mutants, after a green baseline
-(cd tools && npm test)                                   # 161
+cargo build-sbf --manifest-path vendor/lamport-vault/tests/hook-fixture/Cargo.toml   # the transfer hook tests/svm/tests/hook.rs loads
+(cd tests/svm && cargo test)                             # 66, both programs in LiteSVM
+python3 tests/mutants/run.py                             # 28 mutants, after a green baseline
+(cd tools && npm test)                                   # 169
 (cd tools && npm run build:programs && npm run e2e)      # a local validator: four releases, the whole cycle, the Pincer1 link
 (cd app && npm test && npm run build)                    # 63; then app/dist/heir/, with the signer's checks
 (cd app && npm run e2e)                                  # the pages in a headless browser, on the same validator

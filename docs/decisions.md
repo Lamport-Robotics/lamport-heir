@@ -103,9 +103,15 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   frozen, moves only after the issuer thaws it. A paused mint moves once it is resumed.
 - An heir whose token account requires memos has to switch that off to receive a sweep. An heir's
   CPI guard does not stop tokens arriving.
-- Tokens of a mint with a transfer hook are not moved yet. They stay where they are and are
-  reported, like any other token that cannot move, and they hold nothing else back. Supporting
-  them needs a hook program to test against; until one has been run, nothing here claims to.
+- Tokens of a mint with a transfer hook move when the hook's accounts are passed along, which the
+  tools do. The vault's `sweep_closed` and the claim program's `claim_token` hand those accounts
+  to the token program and never pass anybody's signature on: the fee payer and the claiming
+  heir sign the whole transaction, and a hook's list of accounts is the token issuer's to write.
+  So three kinds of hook token stay where they are, reported, holding nothing else back: one
+  whose hook refuses the transfer, one whose hook cannot do without a signature, and one whose
+  hook lists a key that signs the transaction, which the tools decline to build. (Until
+  lamport-vault#8 and the same change here, both programs dropped the accounts and no hook token
+  moved at all. It is tested against a hook program now: lamport-vault's `tests/hook-fixture`.)
 - In every one of these cases the SOL and the other tokens are released as normal.
 
 ## Milestone 3, the finisher, the claim tool and the kit
