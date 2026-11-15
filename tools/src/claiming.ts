@@ -104,7 +104,8 @@ export async function claim(chain: Chain, heir: AnySigner, address: PublicKey, o
       const mint = mints.get(key) ?? (await mintFacts(chain, h.mint));
       mints.set(key, mint);
       const destination = getAssociatedTokenAddressSync(h.mint, heir.publicKey, true, h.tokenProgram);
-      const extraAccounts = await hookAccounts(chain, mint, { source: h.address, destination, authority: claimAddress, amount: h.amount });
+      // the heir signs the claim and pays for it: a hook whose list names the heir is not served
+      const extraAccounts = await hookAccounts(chain, mint, { source: h.address, destination, authority: claimAddress, amount: h.amount }, [heir.publicKey]);
       const instructions = [
         createAssociatedTokenAccountIdempotentInstruction(heir.publicKey, destination, heir.publicKey, h.mint, h.tokenProgram),
         // an account with withheld transfer fees cannot be closed until they are harvested to the mint
