@@ -19,6 +19,10 @@ no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 anchor-debug = []
 custom-heap = []
+# Mainnet build: compiles in the mainnet program id, and the mainnet Heir-enabled vault as the only
+# vault program whose tombstones are believed (docs/program-ids.md). Changes nothing else, and cannot
+# be combined with `short-clocks`.
+mainnet = []
 custom-panic = []
 # A test build for devnet in which a day lasts one second, so a contingent delay runs out during a
 # test. It declares its own program id and believes the vault's `short-clocks` build, and no other:
