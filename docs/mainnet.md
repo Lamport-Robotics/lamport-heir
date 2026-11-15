@@ -10,7 +10,11 @@ The record of what is deployed is the table in [`program-ids.md`](program-ids.md
 - A whole cycle (arm, go quiet, warn, start, release, sweep, claim) has run against a local
   validator with the `short-clocks` builds, in CI on every push. It has not run on a public
   cluster, devnet included ([`devnet.md`](devnet.md)).
-- The programs with real durations have never been deployed anywhere.
+- The programs with real durations have never been deployed on a public cluster. The four CI
+  builds that `deploy-mainnet.sh` deploys were put on a local validator with a copy of that script
+  that differed only in the cluster it accepts: each landed with the hash CI printed, each answers
+  at its mainnet id, and `--burn` left each without an upgrade authority. That rehearses the
+  script, not the programs: no vault was made there.
 
 ## The programs
 
