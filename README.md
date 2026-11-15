@@ -30,6 +30,8 @@ whoever audits it.
 - The reminder service: [`docs/reminders.md`](docs/reminders.md)
 - Devnet: what is deployed (nothing yet), how to deploy, and the cycle that is milestone 4's
   gate: [`docs/devnet.md`](docs/devnet.md)
+- Mainnet: the ids, how a deployment is made, and what has and has not been checked (nothing is
+  deployed there): [`docs/mainnet.md`](docs/mainnet.md)
 - The Pincer1 link: [`docs/pincer-link.md`](docs/pincer-link.md)
 - The vault side lives in lamport-vault as the `succession` cargo feature, merged in
   [lamport-vault#5](https://github.com/Lamport-Robotics/lamport-vault/pull/5); its reference is

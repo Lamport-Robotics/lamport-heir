@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "build": "node build.mjs",
+    "build:mainnet": "LAMPORT_CLUSTER=mainnet node build.mjs",
     "e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {

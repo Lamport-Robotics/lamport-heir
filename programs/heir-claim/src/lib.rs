@@ -26,18 +26,29 @@ pub use error::ClaimError;
 pub use state::{heir_commitment, HeirRef, Plan, Terms, DAY_SECS, HEIR_DOMAIN, MAX_CONTINGENT_DELAY_SECS, MIN_CONTINGENT_DELAY_SECS, PLAN_SEED, TERMS_DOMAIN};
 
 // docs/program-ids.md lists the ids and what is deployed at them. Local tests load the program here too.
-#[cfg(not(feature = "short-clocks"))]
+#[cfg(not(any(feature = "short-clocks", feature = "mainnet")))]
 declare_id!("cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW");
+// The mainnet build: an id of its own, and the mainnet Heir-enabled vault as the only vault program it
+// believes. The `mainnet` feature changes these two ids and nothing else.
+#[cfg(all(feature = "mainnet", not(feature = "short-clocks")))]
+declare_id!("L8EWcWfZbPu3iWNSkShaFJYwLgQ5vAdjLQNzP2DY8Yf");
 // The `short-clocks` test build is a different program: its own id, and its own vault program.
 #[cfg(feature = "short-clocks")]
 declare_id!("HxMZSdKeFP2zJzhYUVNHefqEEz3B87EdTRjKwwPG6UhE");
 
 /// The Heir-enabled vault program: the only program whose tombstones `activate` believes.
-#[cfg(not(feature = "short-clocks"))]
+#[cfg(not(any(feature = "short-clocks", feature = "mainnet")))]
 pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("3mJU9ozZByXsHavMGfzdwDLFs9YuFaMA3jabaLwczxAV");
+/// The Heir-enabled vault on mainnet (lamport-vault built with `mainnet,succession`): the only vault
+/// program the mainnet build believes.
+#[cfg(all(feature = "mainnet", not(feature = "short-clocks")))]
+pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("3XsnTrQJ5XmFyEyVauMmMseHph4wXkn6QWUZCRPjuEEX");
 /// The vault's `short-clocks` test build: the only vault program this test build believes.
 #[cfg(feature = "short-clocks")]
 pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("3pwH161r4SZRH6nCHY4RUm7gk2NZqypyFJaUgv9a2duG");
+
+#[cfg(all(feature = "mainnet", feature = "short-clocks"))]
+compile_error!("`mainnet` compiles in the id of a program that holds value: it cannot be combined with the `short-clocks` test build");
 
 fn is_token_program(key: &Pubkey) -> bool {
     *key == anchor_spl::token::ID || *key == anchor_spl::token_2022::ID

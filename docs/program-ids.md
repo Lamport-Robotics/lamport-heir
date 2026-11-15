@@ -1,6 +1,7 @@
 # Program ids
 
-Four ids, in two pairs. Each has a deployment keypair, made for devnet on 2026-11-13 and kept by
+Four ids for devnet, in two pairs, and a third pair for mainnet further down. Each of the four has
+a deployment keypair, made for devnet on 2026-11-13 and kept by
 the project owner outside every repository. An id says where a build goes, not that it is there:
 the table under "Deployed" is the record of what is.
 
@@ -23,6 +24,19 @@ pairs (`tools/src/programs.ts`) and tell them apart by the program that owns a v
 Until 2026-11-13 the four ids were placeholders with no private key (the SHA-256 of a label).
 Local tests never needed more; a deployment does, because a program refuses to run at an address
 other than the one it declares.
+
+## Mainnet
+
+Mainnet has a pair of its own, and the vault and the registry have mainnet ids too
+([`mainnet.md`](mainnet.md)). Each has a deployment keypair, made on 2026-11-15 and kept by the
+project owner outside every repository.
+
+| program | id |
+|---|---|
+| `heir-claim`, built with `mainnet` | `L8EWcWfZbPu3iWNSkShaFJYwLgQ5vAdjLQNzP2DY8Yf` |
+| Heir-enabled vault (lamport-vault built with `mainnet,succession`) | `3XsnTrQJ5XmFyEyVauMmMseHph4wXkn6QWUZCRPjuEEX` |
+| vault (lamport-vault built with `mainnet`) | `7EiE5pRP5byrY7mzvUBfXS2UD8GwGtPhbGne6D1BTR5H` |
+| registry (pq-registry built with `mainnet`) | `9MYg9uqYBrTPXA6MNRZ6cbpwHSissY3496Y84iofTaNF` |
 
 ## Deployed
 

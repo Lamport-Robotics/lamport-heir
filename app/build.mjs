@@ -9,11 +9,13 @@
 // The page and the signer are the vault's own source (vendor/lamport-vault/web, pinned) and the
 // vault's own build configuration; this script only adds the alias for the seam.
 //
+//   LAMPORT_CLUSTER=mainnet   build for the mainnet programs (npm run build:mainnet). The vault's
+//                      configuration does the work (its cluster.config.ts): ids, genesis hash, endpoints
 //   HEIR_CLOCK=short   build for the short-clocks test programs (a day lasts a second)
 //   HEIR_RPC=<url>     a test build that talks to another endpoint (a local validator)
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
 
@@ -51,7 +53,24 @@ for (const word of ["first heir", "SetSuccession"]) {
   if (!signer.includes(word)) throw new Error(`the signer's bundle lacks "${word}": it was not built as the Heir signer`);
 }
 
+// Which cluster this build is for is written beside the pages, and checked in them: what gets
+// published is compared with it (tools/scripts/deploy-site.sh).
+const mainnet = process.env.LAMPORT_CLUSTER === "mainnet";
+const MAINNET_VAULT = "3XsnTrQJ5XmFyEyVauMmMseHph4wXkn6QWUZCRPjuEEX", MAINNET_CLAIM = "L8EWcWfZbPu3iWNSkShaFJYwLgQ5vAdjLQNzP2DY8Yf";
+const scripts = readdirSync(`${out}assets`).filter((f) => f.endsWith(".js")).map((f) => readFileSync(`${out}assets/${f}`, "utf8")).join("\n");
+for (const f of ["index.html", "claim.html"]) {
+  const page = readFileSync(`${out}${f}`, "utf8");
+  if (mainnet !== page.includes("https://api.mainnet-beta.solana.com")) throw new Error(`${f}: its CSP names the wrong cluster for this build`);
+  if (mainnet && /devnet/i.test(page)) throw new Error(`${f}: a mainnet page that names devnet`);
+}
+// the refusal each signer carries says which side it was built for; the mainnet one must also hold the mainnet id
+if (mainnet && !signer.includes(MAINNET_VAULT)) throw new Error("the mainnet signer does not carry the mainnet vault id");
+if (mainnet !== signer.includes("this is the mainnet signer")) throw new Error("the signer was built for the wrong cluster");
+if (mainnet && !(scripts.includes(MAINNET_VAULT) && scripts.includes(MAINNET_CLAIM) && scripts.includes("/rpc-mainnet"))) throw new Error("the pages were not built for the mainnet programs");
+if (!mainnet && (scripts.includes(MAINNET_CLAIM) && scripts.includes("/rpc-mainnet"))) throw new Error("a devnet build that reaches for mainnet");
+writeFileSync(`${out}CLUSTER`, mainnet ? "mainnet\n" : process.env.HEIR_CLOCK === "short" || process.env.HEIR_RPC ? "test\n" : "devnet\n");
+
 const sha = (f) => createHash("sha256").update(readFileSync(f)).digest("hex");
-console.log(`\ndist/heir/ at ${commit}${process.env.HEIR_CLOCK === "short" ? "  (short-clocks TEST build)" : ""}${process.env.HEIR_RPC ? `  (TEST endpoint ${process.env.HEIR_RPC})` : ""}`);
+console.log(`\ndist/heir/ at ${commit}${mainnet ? "  (MAINNET build)" : ""}${process.env.HEIR_CLOCK === "short" ? "  (short-clocks TEST build)" : ""}${process.env.HEIR_RPC ? `  (TEST endpoint ${process.env.HEIR_RPC})` : ""}`);
 for (const f of ["index.html", "signer.html", "claim.html"]) console.log(`  ${f.padEnd(12)} sha256 ${sha(`${out}${f}`)}`);
 console.log(`  assets/      ${readdirSync(`${out}assets`).length} files`);
