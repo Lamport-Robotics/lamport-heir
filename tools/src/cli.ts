@@ -31,7 +31,7 @@ import { parseSalt, renderKit } from "./kit.ts";
 import { RobotDaemon } from "./pincer/daemon.ts";
 import { arm as armRobot, type ArmRecord, drift, type RobotPlan } from "./pincer/link.ts";
 import { keySigner, makeReadingKey, readLetter, readLetterFile, type ReceivedLetter } from "./letter.ts";
-import { PROGRAMS, SHORT_CLOCKS_PROGRAMS } from "./programs.ts";
+import { MAINNET_PROGRAMS, PROGRAMS, SHORT_CLOCKS_PROGRAMS } from "./programs.ts";
 import { describeStep, finish, inspect, type Situation, start, type Step } from "./release.ts";
 import { holdingsOf } from "./tokens.ts";
 
@@ -47,7 +47,7 @@ export interface Args {
 }
 
 const VALUE_FLAGS = new Set(["rpc", "keypair", "salt", "salt-file", "heir", "label", "out", "cluster", "interval", "max-new-token-accounts", "commit", "daemon", "nonce-account", "mints", "record", "writer"]);
-const BOOLEAN_FLAGS = new Set(["dry-run", "once", "short-clocks", "help"]);
+const BOOLEAN_FLAGS = new Set(["dry-run", "once", "short-clocks", "mainnet", "help"]);
 
 /** Splits a command line into the command, its positional arguments and its `--flags`. */
 export function parseArgs(argv: string[]): Args {
@@ -223,7 +223,7 @@ const HELP = `lamport-heir: collect what a Lamport Vault leaves its heirs, with 
                                            everything finish does, then withdraw as the heir
   kit      <vault> --heir ADDRESS [--salt SALT | --salt-file FILE] [--label NAME] [--out FILE]
                                            write an heir's claim kit (HTML to print)
-  finisher --keypair FILE [--interval SECONDS] [--once] [--max-new-token-accounts N] [--short-clocks]
+  finisher --keypair FILE [--interval SECONDS] [--once] [--max-new-token-accounts N] [--mainnet | --short-clocks]
                                            keep finishing every vault that is due
   letter-key  <plan> --writer ADDRESS --keypair FILE
                                            make your key for reading the family letter the owner
@@ -358,7 +358,12 @@ export async function main(argv: string[], io: Io): Promise<number> {
     }
     case "finisher": {
       const payer = loadKeypair(args.flags.get("keypair"));
-      const programs = args.flags.has("short-clocks") ? SHORT_CLOCKS_PROGRAMS : PROGRAMS;
+      // the finisher watches one pair of programs, and the mainnet pair is never a default: it is named
+      const onMainnet = args.flags.has("mainnet");
+      if (onMainnet && args.flags.has("short-clocks")) throw new UsageError("--mainnet and --short-clocks name two different pairs of programs");
+      if (onMainnet && rpc.includes("devnet")) throw new UsageError("--mainnet with a devnet endpoint: the mainnet programs are not there");
+      if (!onMainnet && rpc.includes("mainnet")) throw new UsageError("this endpoint is a mainnet one: say --mainnet to finish vaults of the mainnet programs");
+      const programs = args.flags.has("short-clocks") ? SHORT_CLOCKS_PROGRAMS : onMainnet ? MAINNET_PROGRAMS : PROGRAMS;
       const max = args.flags.get("max-new-token-accounts");
       const interval = args.flags.get("interval");
       const maxNew = typeof max === "string" ? Number(max) : undefined;

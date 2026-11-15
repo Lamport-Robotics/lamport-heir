@@ -45,6 +45,12 @@ jobs:
       - run: cargo test --workspace --locked
       # the test build for devnet, in which a day lasts a second: other ids, the same rules
       - run: cargo test --workspace --locked --features heir-claim/short-clocks
+      # the mainnet build differs in its pair of ids and in nothing else: the test that says which pair a
+      # build carries runs on that side too, and the build that would be both mainnet and a test must not exist
+      - run: cargo test -p heir-claim --test program_id --locked --features heir-claim/mainnet
+      - name: A mainnet build is never a test build
+        run: |
+          if cargo check -p heir-claim --locked --features heir-claim/mainnet,heir-claim/short-clocks 2>/dev/null; then echo "mainnet and short-clocks built together"; exit 1; fi
 
   svm:
     name: both programs in litesvm
@@ -251,6 +257,27 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: heir-site-${{ github.sha }}
+          path: app/dist/heir
+          if-no-files-found: error
+
+      # the same pages for the mainnet pair of programs. build.mjs fails if a page or the signer of this
+      # build names the wrong cluster. It replaces dist/heir/, which is why the devnet build is uploaded first
+      - name: Build the mainnet pages
+        working-directory: app
+        run: |
+          npm run build:mainnet | tee build-mainnet.log
+          test "$(cat dist/heir/CLUSTER)" = mainnet
+          {
+            echo "### /heir/, mainnet build"
+            echo
+            echo '```'
+            grep -A4 '^dist/heir/' build-mainnet.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: heir-site-mainnet-${{ github.sha }}
           path: app/dist/heir
           if-no-files-found: error
 

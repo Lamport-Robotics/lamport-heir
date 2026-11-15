@@ -115,7 +115,7 @@ function kitsPanel(ctx: HeirCtx, plan: Promise<Terms | null>): HTMLElement | nul
     const b = el("button", { class: "btn", type: "button", "data-kit": heir.toBase58() }, `Kit for ${short(heir.toBase58(), 5)}${salt ? " · private, with their salt" : ""}`);
     b.addEventListener("click", () => {
       try {
-        openKit(renderKit({ cluster: CLUSTER, rpcUrl: RPC_URL.startsWith("http") && !RPC_URL.includes(location.host) ? RPC_URL : "https://api.devnet.solana.com", programs, vault: ctx.address, claim: s.claim, ...(terms ? { terms } : {}), heirAddress: heir, ...(salt ? { salt } : {}), windowSecs: s.windowSecs, waitSecs: s.waitSecs, printedAt: new Date(), source: { repository: "https://github.com/Lamport-Robotics/lamport-heir", commit: typeof __APP_BUILD__ === "string" ? __APP_BUILD__ : "dev" } }));
+        openKit(renderKit({ cluster: CLUSTER, rpcUrl: RPC_URL.startsWith("http") && !RPC_URL.includes(location.host) ? RPC_URL : CLUSTER === "mainnet-beta" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com", programs, vault: ctx.address, claim: s.claim, ...(terms ? { terms } : {}), heirAddress: heir, ...(salt ? { salt } : {}), windowSecs: s.windowSecs, waitSecs: s.waitSecs, printedAt: new Date(), source: { repository: "https://github.com/Lamport-Robotics/lamport-heir", commit: typeof __APP_BUILD__ === "string" ? __APP_BUILD__ : "dev" } }));
       } catch (e) { box.append(el("div", { class: "err" }, String((e as Error).message ?? e))); }
     });
     list.append(b);

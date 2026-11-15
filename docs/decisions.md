@@ -294,3 +294,13 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
 - Counsel on estates, money transmission and wording, before anyone outside is told to rely on this.
 - Merging, except where the owner has said otherwise: on 2026-11-13 he told the builder to review
   and merge Heir's own pull requests once their checks pass.
+- **2026-11-15: mainnet.** The brief limits the work to local validators and devnet "without the
+  project owner's explicit word". The owner's word, after being told that nothing was on mainnet
+  and that neither the vault nor Heir has been audited: "get it to mainnet". What follows from it
+  is in [`mainnet.md`](mainnet.md): mainnet ids of their own for all four programs, the builds CI
+  makes for them, and a deploy script that the owner runs, because it spends SOL and its last step
+  cannot be undone. The vault's site says "an independent audit comes before any mainnet
+  deployment"; the mainnet builds of the pages say instead that the programs have not had one.
+- **2026-11-15: tokens with a transfer hook, before mainnet.** lamport-vault#8 is merged, so that
+  such tokens can leave a vault, and the claim program hands a hook's accounts on in the same way.
+  After the upgrade authority is removed neither could have been fixed.
