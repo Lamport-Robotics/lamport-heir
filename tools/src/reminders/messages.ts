@@ -72,6 +72,17 @@ export function renderNotice(notice: Notice, audience: Audience, label?: string)
         forOwner ? "If you did not make this change, sign a new plan with your vault now, and move your funds if your words may be known to someone else." : "If the owner did not mean to make this change, they need to know.",
       ];
       return { subject, body: `${lines.join("\n")}\n\n${forOwner ? NEVER : `${CONTACT_ROLE}\n\n${NEVER}`}` };
+    case "robot_warning":
+      subject = `Lamport Heir: your Pincer1 has not been touched (${days(notice.days!)} left)`;
+      lines = [
+        `The Pincer1 linked to vault ${name} reports that nobody has touched it for a long time. In ${days(notice.days!)} it will pass the robot's own wallet to the heir it was armed for.`,
+        forOwner ? "Touching the robot resets its timer. This is the robot's own switch and its own wallet: it is separate from the vault, and a touch is not a check-in for the vault." : "A touch on the robot by the owner resets its timer.",
+      ];
+      return { subject, body: `${lines.join("\n")}\n\n${forOwner ? NEVER : `${CONTACT_ROLE}\n\n${NEVER}`}` };
+    case "robot_released":
+      subject = "Lamport Heir: your Pincer1 has passed on its wallet";
+      lines = [`The Pincer1 linked to vault ${name} reports that it has passed the robot's own wallet to its heir (transaction ${notice.signature}).`, "This is the robot's switch, not the vault's: the vault is not affected by it."];
+      return { subject, body: `${lines.join("\n")}\n\n${forOwner ? NEVER : `${CONTACT_ROLE}\n\n${NEVER}`}` };
     case "signature_due":
       subject = `Lamport Heir: a vault signature is due in ${days(notice.days!)}`;
       lines = [`Check-ins for vault ${name} stop counting on ${at}: they can stand in for a vault signature for two years at most.`, "Before then, sign any action with your vault. A small transfer to yourself is enough."];

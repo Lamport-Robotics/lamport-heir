@@ -12,6 +12,7 @@
  * because something changed (a plan change) is not lost when its first delivery fails.
  */
 import { decodeSuccessionBlock, decodeTombstone, isLiveVault, isTombstone, SUCCESSION_BLOCK_OFFSET, SUCCESSION_BLOCK_SIZE } from "@lamport-robotics/vault";
+import { createHash } from "node:crypto";
 import { PublicKey } from "@solana/web3.js";
 import { type Chain, clusterTime, COMMITMENT } from "../chain.ts";
 import { programsForVaultProgram } from "../programs.ts";
@@ -44,6 +45,11 @@ export interface Subscription {
   owner: Recipient[];
   /** trusted contacts: people the heirs do not control */
   contacts: Recipient[];
+  /**
+   * SHA-256 (hex) of the secret in the address the owner's Pincer1 posts its warnings to. Only the
+   * hash is kept: a copy of the store does not let anyone post as the robot.
+   */
+  robotHookHash?: string;
 }
 
 /** A notice waiting to reach one recipient. */
@@ -63,6 +69,8 @@ export interface Store {
   snapshot(vault: string): Promise<Snapshot | undefined>;
   /** Records a vault's new snapshot and queues deliveries in one step. Deliveries whose id was ever queued are ignored. */
   record(vault: string, snapshot: Snapshot, deliveries: Delivery[]): Promise<void>;
+  /** Queues deliveries without touching any snapshot. Ids ever queued before are ignored. */
+  enqueue(deliveries: Delivery[]): Promise<void>;
   /** Deliveries queued and not yet marked done. */
   outbox(): Promise<Delivery[]>;
   done(id: string, outcome: "sent" | "expired"): Promise<void>;
@@ -109,6 +117,42 @@ export class ReminderService {
     this.chain = chain;
     this.store = store;
     this.channels = channels;
+  }
+
+  /**
+   * A message from an owner's Pincer1, posted to the address that carries `secret`. The robot sends
+   * two things: a warning that its own switch will fire in some days, and word that it has fired.
+   *
+   * Whoever knows the address can post to it, so the most a forged call can do is cause a
+   * reminder: nothing here changes a plan, a clock or a subscription, and the same event is passed
+   * on once. Returns whether anything was queued; a caller on the network is told nothing either
+   * way.
+   */
+  async robotEvent(secret: string, body: unknown): Promise<boolean> {
+    const hash = createHash("sha256").update(secret).digest("hex");
+    const sub = (await this.store.subscriptions()).find((s) => s.robotHookHash !== undefined && s.robotHookHash === hash);
+    if (!sub || typeof body !== "object" || body === null) return false;
+    const b = body as Record<string, unknown>;
+    let notice: Notice;
+    if (b.event === "inheritance_warning" && typeof b.daysLeft === "number" && Number.isInteger(b.daysLeft) && b.daysLeft >= 0 && b.daysLeft <= 65_535) {
+      // one reminder per stage per day, however often it is posted
+      const day = Math.floor(Date.now() / 86_400_000);
+      notice = { key: `${sub.vault}:robot:warning:${b.daysLeft}:${day}`, kind: "robot_warning", audience: b.daysLeft <= 7 ? ["owner", "contacts"] : ["owner"], vault: sub.vault, days: b.daysLeft };
+    } else if (b.event === "inheritance_released" && typeof b.signature === "string" && /^[1-9A-HJ-NP-Za-km-z]{64,90}$/.test(b.signature)) {
+      notice = { key: `${sub.vault}:robot:released:${b.signature}`, kind: "robot_released", audience: ["owner", "contacts"], vault: sub.vault, signature: b.signature };
+    } else {
+      return false;
+    }
+    const now = await clusterTime(this.chain);
+    const deliveries: Delivery[] = [];
+    for (const audience of notice.audience) {
+      for (const recipient of audience === "owner" ? sub.owner : sub.contacts) {
+        deliveries.push({ id: `${notice.key}|${audience}|${recipient.channel}:${recipient.to}`, notice, audience, recipient, ...(sub.label ? { label: sub.label } : {}), queuedAt: now });
+      }
+    }
+    const before = (await this.store.outbox()).length;
+    await this.store.enqueue(deliveries);
+    return (await this.store.outbox()).length > before;
   }
 
   /** One round: read every subscribed vault, queue what is newly due, then work through the outbox. */
@@ -177,6 +221,9 @@ export class MemoryStore implements Store {
   }
   async record(vault: string, snapshot: Snapshot, deliveries: Delivery[]): Promise<void> {
     this.snapshots.set(vault, snapshot);
+    await this.enqueue(deliveries);
+  }
+  async enqueue(deliveries: Delivery[]): Promise<void> {
     for (const d of deliveries) {
       if (this.history.has(d.id)) continue;
       this.history.set(d.id, "");

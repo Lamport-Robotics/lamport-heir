@@ -160,10 +160,12 @@ describe("what a reminder says", () => {
     { key: "k", kind: "released", audience: ["owner", "contacts"], vault: VAULT, heir: heir.toBase58() },
     { key: "k", kind: "plan_changed", audience: ["owner", "contacts"], vault: VAULT, changes: ["the waiting period changed from 60 days to 30 days"], earliestRelease: T0 + 120n * DAY },
     { key: "k", kind: "signature_due", audience: ["owner"], vault: VAULT, days: 30, at: T0 },
+    { key: "k", kind: "robot_warning", audience: ["owner", "contacts"], vault: VAULT, days: 7 },
+    { key: "k", kind: "robot_released", audience: ["owner", "contacts"], vault: VAULT, signature: "5".repeat(88) },
   ];
 
   it("has a template for every kind of notice", () => {
-    const all: NoticeKind[] = ["deadline_ahead", "overdue", "wait_opened", "release_ahead", "releasable", "released", "plan_changed", "signature_due"];
+    const all: NoticeKind[] = ["deadline_ahead", "overdue", "wait_opened", "release_ahead", "releasable", "released", "plan_changed", "signature_due", "robot_warning", "robot_released"];
     expect(new Set(samples.map((s) => s.kind))).toEqual(new Set(all));
   });
 
