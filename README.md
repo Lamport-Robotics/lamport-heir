@@ -8,13 +8,15 @@ waiting period. Any signature or check-in from the owner cancels it. If none com
 releases to a claim account, and only the heirs the owner named can withdraw from it. The same plan
 arms and watches Pincer1's own dead-man's switch for the robot's wallet.
 
-**Status: milestone 4, one step short.** The claim program, the vault's inactivity clock, the
-finisher, the claim tool and the claim kit are merged and tested. The pages, the offline signer's
-Heir build and the reminder service are built and tested; what is left of milestone 4 is its
-gate, one whole cycle on devnet, which has run on a local validator only
-([`docs/devnet.md`](docs/devnet.md)). The Pincer1 link and the audit guide are in pull requests
-stacked on this one. **Nothing is deployed.** Local validators and devnet only. Nothing in this
-repository is audited.
+**Status: milestones 0 to 6 are built and merged. Nothing is deployed.** The claim program, the
+vault's inactivity clock, the finisher, the claim tool and kit, the pages, the offline signer's
+Heir build, the reminder service and the Pincer1 link are tested here on every push, including
+one whole cycle against a local validator: arm, go quiet, warn, start, release, sweep, claim.
+That cycle has not run on devnet, by the project owner's decision
+([`docs/decisions.md`](docs/decisions.md)), and the pages are served nowhere until the programs
+are on devnet ([`docs/devnet.md`](docs/devnet.md)). Local validators and devnet only. **Nothing
+in this repository is audited**; [`docs/audit/README.md`](docs/audit/README.md) is written for
+whoever audits it.
 
 - Spec: [Lamport Heir spec](https://claude.ai/artifact/G1AFWhoqMZqufobPxZRNuC)
 - How the spec maps onto the vault and the Pincer1 daemon, and where it does not fit:
@@ -77,9 +79,9 @@ npm test && npm run build                                           # app/dist/h
 | M1 | claim program: `init_plan`, `activate`, `claim_sol`, `claim_token`, optional hashed heirs | merged |
 | M2 | Heir-enabled vault: succession state, `SetSuccession`, check-ins, the waiting period, release | merged |
 | M3 | permissionless finisher, claim command-line tool, printable claim kit | merged |
-| M4 | app and reminder service | built; the devnet run is outstanding ([#5](https://github.com/Lamport-Robotics/lamport-heir/pull/5)) |
-| M5 | Pincer1 link | built, passes against the daemon's simulator ([#6](https://github.com/Lamport-Robotics/lamport-heir/pull/6)) |
-| M6 | audit preparation | a guide, in draft ([#7](https://github.com/Lamport-Robotics/lamport-heir/pull/7)); no frozen commit yet |
+| M4 | app and reminder service | merged; the spec's devnet run was waived by the project owner and has not happened |
+| M5 | Pincer1 link | merged; passes against the daemon's simulator |
+| M6 | audit preparation | merged: a guide for an auditor; the commit to audit is the one tagged `audit-1` |
 
 ## Rules this is built under
 
