@@ -1,13 +1,15 @@
 # For an auditor
 
-**Draft.** Milestone 6 ends with a frozen commit; this is not it yet. Two things stand between
-this and a frozen commit: milestone 4's gate is a cycle on devnet, which has run on a local
-validator only ([`../devnet.md`](../devnet.md)), and nothing is deployed anywhere.
+The commit to audit is the one tagged `audit-1`; this file is part of it. Two things to know
+before anything else: the whole cycle (arm, go quiet, warn, start, release, sweep, claim) has run
+against a local validator, on every push, and **never on devnet**, by the project owner's
+decision ([`../devnet.md`](../devnet.md)); and **nothing is deployed anywhere**.
 
 Nothing here has been audited. Two reviewers who had not seen the code read both programs before
-they were merged, and a third read the pages, the offline signer's Heir build and the reminder
-channels after they were written (the findings of all three are at the end). Those are reviews,
-by reading, not an audit.
+they were merged; a third read the pages, the offline signer's Heir build and the reminder
+channels after they were written; a fourth read the family letter and a fifth the private-heir
+flow before either was pushed. The findings of all five are at the end. Those are reviews, by
+reading and with small tests, not an audit.
 
 ## What moves funds
 
