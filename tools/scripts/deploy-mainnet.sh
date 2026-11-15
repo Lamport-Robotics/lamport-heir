@@ -106,7 +106,8 @@ rows | while IFS='|' read -r name repo prefix file id devnet_id; do
     gh run download "$run" --repo "$repo" --name "$prefix-$sha" --dir "$dir" >/dev/null || fail "could not download $prefix-$sha from $repo"
   fi
   [ -f "$dir/$file" ] || fail "$dir/$file is missing from the artifact"
-  # a build carries its own id: the mainnet one has to be in it, and the devnet one the same source declares must not be
+  # a build carries its own id: the mainnet one has to be in it, and the devnet one the same source declares must not be.
+  # the claim program also carries the one vault program it believes: that has to be the mainnet Heir-enabled vault
   python3 -I - "$dir/$file" "$id" "$devnet_id" "$name" <<'PY' || exit 1
 import hashlib, sys
 ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -115,14 +116,26 @@ def raw(address: str) -> bytes:
     for c in address:
         n = n * 58 + ALPHABET.index(c)
     return n.to_bytes(32, "big")
-elf = open(sys.argv[1], "rb").read()
+def carries(elf: bytes, address: str) -> bool:
+    """An id is in a program either whole, as data, or as the four 8-byte immediates the compiler
+    loads it with: each is one lddw, its low half, four bytes of the next slot's header, its high half."""
+    b = raw(address)
+    return b in elf or all(b[i:i + 4] + bytes(4) + b[i + 4:i + 8] in elf for i in range(0, 32, 8))
+path, mainnet_id, devnet_id, name = sys.argv[1:5]
+elf = open(path, "rb").read()
 if elf[:4] != b"\x7fELF":
-    sys.exit(f"{sys.argv[4]}: the artifact is not a program")
-if raw(sys.argv[2]) not in elf:
-    sys.exit(f"{sys.argv[4]}: the build does not carry the mainnet id {sys.argv[2]}")
-if raw(sys.argv[3]) in elf:
-    sys.exit(f"{sys.argv[4]}: the build carries the devnet id {sys.argv[3]}: it is not the mainnet build")
-print(f"{sys.argv[4]:<11} {hashlib.sha256(elf.rstrip(bytes(1))).hexdigest()}  {len(elf)} bytes")
+    sys.exit(f"{name}: the artifact is not a program")
+must, must_not = [mainnet_id], [devnet_id]
+if name == "heir-claim":
+    must.append("3XsnTrQJ5XmFyEyVauMmMseHph4wXkn6QWUZCRPjuEEX")      # the mainnet Heir-enabled vault
+    must_not.append("3mJU9ozZByXsHavMGfzdwDLFs9YuFaMA3jabaLwczxAV")  # the devnet one
+for address in must:
+    if not carries(elf, address):
+        sys.exit(f"{name}: the build does not carry the mainnet id {address}")
+for address in must_not:
+    if carries(elf, address):
+        sys.exit(f"{name}: the build carries the devnet id {address}: it is not the mainnet build")
+print(f"{name:<11} {hashlib.sha256(elf.rstrip(bytes(1))).hexdigest()}  {len(elf)} bytes")
 PY
 done
 
