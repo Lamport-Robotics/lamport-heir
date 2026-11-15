@@ -57,7 +57,7 @@ node tools/scripts/build-programs.mjs     # needs Agave 2.3.x; platform-tools v1
 | `heir-claim` | printed by this repository's `both programs in litesvm` job |
 
 | the pages and the Heir signer (`app/dist/heir/`) | printed by this repository's `app` job; the signer carries its commit |
-| the vault's own page and signer (lamport-vault `web/dist/`) | byte for byte what they were before the Heir build existed; the `web` job in lamport-vault checks that no Heir code is in them |
+| the vault's own page and signer (lamport-vault `web/dist/`) | the Heir build left them byte for byte what they were, and the `web` job in lamport-vault checks that no Heir code is in them; they changed once since, by the signer fix in lamport-vault#10 |
 
 Program ids have deployment keypairs, kept by the project owner outside every repository
 ([`../program-ids.md`](../program-ids.md)). Nothing is deployed at them yet.
@@ -306,9 +306,16 @@ build constant, a type-only cast, or folds to the old value.
 - smaller: a delay rounded down on the acceptance page, an endpoint's full address in the
   cycle's report, a comment that overstated what "non-extractable" protects.
 
-**Open, outside this repository:** one finding is in the vault's own signer, which the Heir
-signer is built from. A fix is written and is with the project owner; it is not described here
-until it is published.
+**Found in the vault's own signer, which the Heir signer is built from, and fixed there**
+(lamport-vault#10, merged as `1607e46`, which this repository pins): the signer took a request up
+for signing as soon as it passed its checks and only then wrote out what it means, so a request
+it failed to describe stayed taken up, with an error line on the screen in place of a
+description. A token transfer with more than 100 decimals made the description fail. It now
+takes a request up only once its description is on the screen, writes amounts out exactly for
+any number of decimals, and signs the request as it stood when Sign was pressed. The browser
+test gives the built Heir signer that request (`app/e2e/pages.e2e.ts`). The fix was held back
+until the project owner said to publish it, on 2026-11-14, and the vault's site was redeployed
+from that build the same day. A signer file saved before then is the old one.
 
 **Not covered by that review:** `tools/src/cli.ts`, `finisher.ts`, `letter.ts` (reviewed since: the next section), `plan/`, the
 reminder schedule and service beyond the send loop, the programs beyond the terms and the proof
