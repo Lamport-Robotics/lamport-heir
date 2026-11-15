@@ -364,6 +364,17 @@ describe("the pages, in a browser, on a local validator", () => {
     const signer = await context.newPage(); watch(signer, "signer");
     await signer.goto(`${base}/heir/signer.html`);
     expect(await signer.title()).toBe("Lamport Heir · cold signer");
+    // a request for a token with 255 decimals. the vault's signer used to fail while writing such an amount out, and
+    // was left holding a request it had shown nothing for. it writes the amount exactly, so there is a description
+    const TOKEN = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), ATA = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+    const mint = new PublicKey(new Uint8Array(32).fill(9));
+    const ata = PublicKey.findProgramAddressSync([heirWallet.toBuffer(), TOKEN.toBuffer(), mint.toBuffer()], ATA)[0];
+    const odd = { ...JSON.parse(request), action: { kind: "TransferToken", mint: mint.toBase58(), to: ata.toBase58(), toOwner: heirWallet.toBase58(), amount: "123456", tokenProgram: TOKEN.toBase58(), decimals: 255 } };
+    await signer.fill("#req", JSON.stringify(odd));
+    await signer.waitForSelector("#reqview dl");
+    expect(await signer.locator("#reqview .err").count()).toBe(0);
+    expect((await signer.locator("#reqview dl").innerText()).replace(/\s/g, "")).toMatch(/0\.0{249}123456/);
+
     const forged = JSON.parse(request);
     forged.action.terms.primary.address = ownerWallet.toBase58(); // the heirs shown would be someone else's
     await signer.fill("#req", JSON.stringify(forged));
