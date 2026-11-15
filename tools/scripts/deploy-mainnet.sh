@@ -139,18 +139,47 @@ print(f"{name:<11} {hashlib.sha256(elf.rstrip(bytes(1))).hexdigest()}  {len(elf)
 PY
 done
 
-# what is on chain for a program: "absent", or "<hash of the code> <authority, or none>"
+# what is on chain for a program: "absent", or "<hash of the code> <authority, or none>".
+# Asked of the endpoint directly, so that it does not depend on how the command-line tool is set up
+# on this machine. An answer that cannot be read stops the script: a failed question is never
+# taken for "absent", because the next step would then be to deploy again.
 onchain() {
-  local id="$1" show data
-  show="$(solana program show "$id" --url "$URL" --output json 2>/dev/null)" || { echo absent; return; }
-  data="$(mktemp)"
-  solana account "$(python3 -I -c 'import json,sys; print(json.loads(sys.argv[1])["programdataAddress"])' "$show")" --url "$URL" --output-file "$data" >/dev/null
-  python3 -I - "$data" "$show" <<'PY'
-import hashlib, json, sys
-raw = open(sys.argv[1], "rb").read()
-print(hashlib.sha256(raw[45:].rstrip(bytes(1))).hexdigest(), json.loads(sys.argv[2]).get("authority") or "none")
+  python3 -I - "$URL" "$1" <<'PY'
+import base64, hashlib, json, sys, urllib.request
+ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+def b58(b: bytes) -> str:
+    n, s = int.from_bytes(b, "big"), ""
+    while n:
+        n, r = divmod(n, 58)
+        s = ALPHABET[r] + s
+    return "1" * (len(b) - len(b.lstrip(bytes(1)))) + s
+def account(url: str, address: str):
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "getAccountInfo", "params": [address, {"encoding": "base64", "commitment": "confirmed"}]}).encode()
+    request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    answer = json.load(urllib.request.urlopen(request, timeout=120))
+    if "result" not in answer:
+        sys.exit(f"the endpoint did not answer for {address}: {answer.get('error')}")
+    value = answer["result"]["value"]
+    return None if value is None else (value["owner"], base64.b64decode(value["data"][0]))
+url, program = sys.argv[1:3]
+LOADER = "BPFLoaderUpgradeab1e11111111111111111111111"
+found = account(url, program)
+if found is None:
+    print("absent")
+    sys.exit(0)
+owner, data = found
+# a program account of the upgradeable loader: u32 2, then the address of its data account
+if owner != LOADER or len(data) != 36 or int.from_bytes(data[:4], "little") != 2:
+    sys.exit(f"{program} exists and is not a program of the upgradeable loader: look at it before anything else")
+programdata = account(url, b58(data[4:36]))
+if programdata is None:
+    sys.exit(f"{program} has no data account: look at it before anything else")
+raw = programdata[1]
+# the data account: u32 3, u64 slot, Option<Pubkey> authority (1 + 32), then the code and zero padding
+if int.from_bytes(raw[:4], "little") != 3 or raw[45:49] != b"\x7fELF":
+    sys.exit(f"{program}: its data account does not hold a program")
+print(hashlib.sha256(raw[45:].rstrip(bytes(1))).hexdigest(), b58(raw[13:45]) if raw[12] == 1 else "none")
 PY
-  rm -f "$data"
 }
 built_hash() { python3 -I -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read().rstrip(bytes(1))).hexdigest())' "$1"; }
 so_of() { # the artifact file of a row
@@ -207,7 +236,9 @@ if [ "$mode" = deploy ]; then
     [ -f "$buffer" ] || { solana-keygen new --no-bip39-passphrase --silent --outfile "$buffer" >/dev/null 2>&1; chmod 600 "$buffer"; }
     solana program deploy "$so" --url "$URL" --keypair "$KEYS/deployer.json" --program-id "$KEYS/$name.json" \
       --upgrade-authority "$KEYS/deployer.json" --buffer "$buffer" --with-compute-unit-price "$CU_PRICE" --max-sign-attempts 60 --use-rpc
-    state="$(onchain "$id")"
+    # the deploy is confirmed when the tool returns; give the endpoint a minute to show it
+    state=absent
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do state="$(onchain "$id")"; [ "$state" = absent ] || break; sleep 5; done
     [ "$state" != absent ] || fail "$name is not on chain after the deploy"
     [ "${state%% *}" = "$(built_hash "$so")" ] || fail "$name on chain is NOT the CI build. Do not use it, and do not burn its authority."
     [ "${state##* }" = "$deployer" ] || fail "$name has upgrade authority ${state##* }, not the deployer"
