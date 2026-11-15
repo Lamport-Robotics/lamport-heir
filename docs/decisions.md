@@ -252,11 +252,20 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   record of which one-time signing keys have been used, and the check-in key it keeps in the
   browser belongs to that origin.
 
+- **2026-11-14: no devnet test run before merging.** The spec's gate for milestone 4 is one whole
+  cycle on devnet with short durations. Asked for the test SOL it needs, the owner answered "we
+  dont need a dev test it will be fine". Milestones 4 to 6 were merged on the cycle's runs
+  against a local validator, which CI repeats on every push. The cycle has not run on devnet,
+  and [`devnet.md`](devnet.md) says so.
+- **2026-11-14: the fix for the vault's own cold signer is published** (lamport-vault#10), on the
+  owner's word. It was found by the review of the signer's Heir build and held back until then.
+
 ## Still the project owner's
 
-- Test SOL for the devnet deployment. The keys exist (2026-11-13, with the owner's word) and the
-  ids are in the source, but devnet's command-line faucet is closed and its web faucet does not
-  serve automated clients: about 10 SOL has to be requested by a person.
+- Test SOL for the devnet deployment of the pair the pages talk to. The keys exist (2026-11-13,
+  with the owner's word) and the ids are in the source, but devnet's command-line faucet is
+  closed and its web faucet does not serve automated clients: about 5 SOL has to be requested by
+  a person. Until then nothing is deployed and the pages are served nowhere.
 - Anything on mainnet, and any real funds.
 - Counsel on estates, money transmission and wording, before anyone outside is told to rely on this.
 - Merging, except where the owner has said otherwise: on 2026-11-13 he told the builder to review

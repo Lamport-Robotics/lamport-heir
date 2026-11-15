@@ -1,17 +1,27 @@
 # Devnet
 
-Milestone 4 ends with one whole cycle on devnet, with short durations: arm, go quiet, warn, start,
-release, sweep, claim. Everything for it is in the repository and has been run against a local
-validator. **Nothing is deployed yet**, for one reason: the deployment needs about 3.4 SOL of
-test SOL, devnet's command-line faucet is closed (`requestAirdrop` answers 410), the
-proof-of-work faucets are empty, and <https://faucet.solana.com> asks automated clients not to
-use it. A person has to request it.
+The spec ends milestone 4 with one whole cycle on devnet, with short durations: arm, go quiet,
+warn, start, release, sweep, claim. Everything for it is in the repository, and it runs against a
+local validator on every push. **It has not run on devnet, and nothing is deployed there.** On
+2026-11-14 the project owner decided not to wait for a devnet test run
+([`decisions.md`](decisions.md), "From the project owner"), and milestone 4 was merged on the
+local runs.
+
+A deployment needs test SOL. Devnet's command-line faucet is closed (`requestAirdrop` answers
+410), the proof-of-work faucets are empty, and <https://faucet.solana.com> asks automated clients
+not to use it, so a person has to request it. The pages cannot be served before the pair with
+real durations is on devnet: they would be pages for programs that do not exist.
 
 ## What to do
 
-1. **Test SOL.** On <https://faucet.solana.com>, request 5 SOL for the deployer address,
-   `4ARvLemSynLjt82WaBvcyS93E7PB5ZdSwR2HwQgiRBcg`. That covers the test pair and the cycle. A
-   second 5 SOL covers the pair with real durations as well.
+For the pages, only the pair with real durations is needed: 5 SOL on
+<https://faucet.solana.com> for the deployer address,
+`4ARvLemSynLjt82WaBvcyS93E7PB5ZdSwR2HwQgiRBcg`, then `scripts/deploy-devnet.sh --real`, then
+"Putting the pages on the site" below.
+
+The test run, should anyone want it, is the rest of this list and another 5 SOL:
+
+1. **Test SOL**, as above.
 2. **Deploy the test pair.**
    ```sh
    cd tools && npm run build:programs && scripts/deploy-devnet.sh
@@ -87,7 +97,7 @@ The run cost the paying key 0.0082 SOL.
 
 ### On devnet
 
-Not run yet.
+Not run. The project owner decided on 2026-11-14 not to wait for it.
 
 ## Putting the pages on the site
 
