@@ -15,7 +15,7 @@
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::instructions::ID as INSTRUCTIONS_SYSVAR_ID;
-use anchor_spl::token_interface::{self, CloseAccount, TransferChecked};
+use anchor_spl::token_interface::{self, CloseAccount};
 
 pub mod error;
 pub mod proof;
@@ -69,6 +69,50 @@ fn token_account_fields(ai: &AccountInfo) -> Result<(Pubkey, Pubkey, u64)> {
     let owner = Pubkey::new_from_array(data[32..64].try_into().unwrap());
     let amount = u64::from_le_bytes(data[64..72].try_into().unwrap());
     Ok((mint, owner, amount))
+}
+
+/// `transfer_checked` of `amount` by `authority`, a PDA of this program signed with `seeds`, that
+/// hands `extra` on to the token program after the four accounts the instruction names. The same
+/// call lamport-vault makes for a vault's tokens (its docs/DESIGN.md, "Transfer hooks").
+///
+/// A Token-2022 mint with a transfer hook cannot be transferred without the hook program, its
+/// validation account and the accounts that account lists. Whoever sends the claim supplies them
+/// after `claim_token`'s own accounts, and this program does not look at them: the token program
+/// reads the mint, finds the hook's own list and picks out, by address, the accounts it names.
+/// For a mint without a hook, and under the original Token program, it reads none of them.
+///
+/// Each one is passed on writable only if the transaction made it writable, and never as a signer,
+/// whoever signed the transaction. The heir signs every claim and usually pays for it, so the
+/// heir is a signer in the whole transaction; a hook's list is written by the mint's owner and can
+/// name the heir. The only signature the token program gets from here is the plan's, for the
+/// authority, and the token program hands the hook that account read-only and unsigned. A hook
+/// that cannot do without somebody's signature therefore fails the transfer, and nothing moves.
+///
+/// `init_plan` reads its own remaining accounts for something else (an heir who signed the
+/// transaction). The two never meet: each instruction sees only its own accounts, nothing passed
+/// on from here is a signer, and a hook cannot call back into this program while a claim runs.
+///
+/// (anchor-spl's `transfer_checked` sends the four named accounts and drops whatever
+/// `with_remaining_accounts` was given, so it cannot be used here.)
+#[allow(clippy::too_many_arguments)]
+fn transfer_checked_with_extra_accounts<'info>(
+    token_program: &Pubkey,
+    from: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    authority: &AccountInfo<'info>,
+    extra: &[AccountInfo<'info>],
+    amount: u64,
+    decimals: u8,
+    seeds: &[&[u8]],
+) -> Result<()> {
+    let mut ix = anchor_spl::token_2022::spl_token_2022::instruction::transfer_checked(token_program, from.key, mint.key, to.key, authority.key, &[], amount, decimals)?;
+    let mut infos = vec![from.clone(), mint.clone(), to.clone(), authority.clone()];
+    for account in extra {
+        ix.accounts.push(AccountMeta { pubkey: account.key(), is_signer: false, is_writable: account.is_writable });
+        infos.push(account.clone());
+    }
+    anchor_lang::solana_program::program::invoke_signed(&ix, &infos, &[seeds]).map_err(Into::into)
 }
 
 /// Who is claiming.
@@ -202,8 +246,8 @@ pub mod heir_claim {
     /// heir owns, and, when `close_account` is set, closes the plan's account, its rent to the heir.
     ///
     /// Signing rules as for `claim_sol`. Token and Token-2022. Accounts after the named ones go to
-    /// the token program as they are: a mint with a transfer hook needs its hook program and extra
-    /// accounts there.
+    /// the token program, none of them as a signer: a mint with a transfer hook needs its hook
+    /// program and the hook's accounts there.
     ///
     /// `close_account` is the caller's choice because some accounts cannot be closed yet (a
     /// Token-2022 account holding withheld transfer fees must be harvested first). The tokens can
@@ -237,21 +281,7 @@ pub mod heir_claim {
         let signer_seeds: &[&[u8]] = &[PLAN_SEED, &plan.terms_hash, &[plan.bump]];
         if amount > 0 {
             let decimals = mint_decimals(mint_ai)?;
-            token_interface::transfer_checked(
-                CpiContext::new_with_signer(
-                    token_program.to_account_info(),
-                    TransferChecked {
-                        from: source.to_account_info(),
-                        mint: mint_ai.to_account_info(),
-                        to: destination.to_account_info(),
-                        authority: plan.to_account_info(),
-                    },
-                    &[signer_seeds],
-                )
-                .with_remaining_accounts(ctx.remaining_accounts.to_vec()),
-                amount,
-                decimals,
-            )?;
+            transfer_checked_with_extra_accounts(token_program.key, source, mint_ai, destination, &plan.to_account_info(), ctx.remaining_accounts, amount, decimals, signer_seeds)?;
         }
         if close_account {
             token_interface::close_account(CpiContext::new_with_signer(
