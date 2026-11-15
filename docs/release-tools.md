@@ -99,8 +99,10 @@ What the tool says for tokens it cannot move comes from the token program's own 
 
 One case it handles without being asked: an account with **withheld transfer fees** cannot be
 closed, so the tool harvests the fees to the mint (which anyone may do) in the same transaction.
-Tokens of a mint with a **transfer hook** are not moved yet: they are reported and left where they
-are.
+Tokens of a mint with a **transfer hook** need the hook's accounts in the transaction. The tools
+read them from the chain and add them, never as signers. A token whose hook refuses, or whose
+hook's list names the very key that signs the transaction (the heir who claims, whoever pays for
+a sweep), is reported and left where it is.
 
 ### The heir's key
 
@@ -168,8 +170,10 @@ nothing else back.
 
 ## What is not done
 
-- **Tokens with a transfer hook are not moved.** They are reported and stay where they are.
-  Moving them needs a hook program to test against, and has not been built.
+- **The end-to-end run has no token with a transfer hook in it.** Such tokens are moved by both
+  programs in LiteSVM against a real hook program (`tests/svm/tests/hook.rs`, and lamport-vault's
+  `tests/svm/tests/transfer_hook.rs`), and the tools' transactions for them are checked without a
+  cluster (`tools/test/hook.test.ts`). The tools have not sent one to a validator.
 - **Hardware and phone wallets** claim through the page in milestone 4, not through this tool.
 - **The finisher asks again every pass about a token that cannot move.** That costs RPC calls, not
   fees.

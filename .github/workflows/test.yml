@@ -6,7 +6,8 @@ name: test
 # svm      both programs built for Solana (agave 2.3.13, platform-tools v1.56: the pins
 #          lamport-vault builds with) and run in LiteSVM, where the tests can move the clock: every
 #          instruction of the claim program, every refusal, random sequences against a model of
-#          the rules, and the real Heir-enabled vault releasing into a real plan (tests/release.rs).
+#          the rules, the real Heir-enabled vault releasing into a real plan (tests/release.rs), and
+#          tokens with a Token-2022 transfer hook against the vault's hook fixture (tests/hook.rs).
 # mutants  breaks the claim program one way at a time; a test must notice each time.
 # tools    the finisher, the claim tool and the claim kit: types, unit tests, and the single-file
 #          build of the command-line tool, whose sha256 is printed.
@@ -66,6 +67,7 @@ jobs:
             . -> target
             tests/svm -> target
             vendor/lamport-vault -> target
+            vendor/lamport-vault/tests/hook-fixture -> target
           cache-targets: true
 
       - uses: ./.github/actions/solana-tools
@@ -89,6 +91,11 @@ jobs:
         run: |
           cargo build-sbf --manifest-path vendor/lamport-vault/programs/lamport-vault/Cargo.toml --features succession --sbf-out-dir "$PWD/target/deploy" -- --locked
           sha256sum target/deploy/lamport_vault.so
+
+      # tests/hook.rs loads a transfer hook next to the two programs: the vault's own test fixture,
+      # from the same submodule. It is in no build that is deployed.
+      - name: Build the transfer-hook fixture
+        run: cargo build-sbf --manifest-path vendor/lamport-vault/tests/hook-fixture/Cargo.toml
 
       # run from inside the crate: its rust-toolchain.toml pins the toolchain litesvm's agave crates need
       - name: cargo test (tests/svm)
@@ -118,6 +125,7 @@ jobs:
             . -> target
             tests/svm -> target
             vendor/lamport-vault -> target
+            vendor/lamport-vault/tests/hook-fixture -> target
           cache-targets: true
 
       - uses: ./.github/actions/solana-tools

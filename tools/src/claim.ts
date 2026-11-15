@@ -344,8 +344,9 @@ export function claimSolInstruction(p: { claimProgram?: PublicKey; plan: PublicK
  * `claim_token`: the whole balance of one token account the plan owns goes to `destination`, a
  * token account of the same mint that the claiming heir owns. With `closeAccount`, the plan's
  * account is closed and its rent goes to the heir; leave it unset for an account that cannot be
- * closed yet (withheld transfer fees). `extraAccounts` go to the token program as they are: a mint
- * with a transfer hook needs its accounts there.
+ * closed yet (withheld transfer fees). `extraAccounts` go to the token program: a mint with a
+ * transfer hook needs the hook's accounts there (`hookAccounts` in tokens.ts resolves them). They
+ * are added unsigned whatever their `isSigner` says; the program passes none on as a signer.
  */
 export function claimTokenInstruction(p: {
   claimProgram?: PublicKey;
@@ -361,7 +362,7 @@ export function claimTokenInstruction(p: {
 }): TransactionInstruction {
   return new TransactionInstruction({
     programId: p.claimProgram ?? HEIR_CLAIM_PROGRAM_ID,
-    keys: [w(p.plan), ws(p.heir), w(p.planTokenAccount), w(p.destination), r(p.mint), r(p.tokenProgram), ...(p.extraAccounts ?? [])],
+    keys: [w(p.plan), ws(p.heir), w(p.planTokenAccount), w(p.destination), r(p.mint), r(p.tokenProgram), ...(p.extraAccounts ?? []).map((m) => ({ pubkey: m.pubkey, isSigner: false, isWritable: m.isWritable }))],
     data: Buffer.from(concat(CLAIM_IX.claimToken, optionSalt(p.salt), Uint8Array.of(p.closeAccount ? 1 : 0))),
   });
 }

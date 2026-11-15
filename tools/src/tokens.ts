@@ -8,17 +8,9 @@
  * paused and non-transferable tokens fail cleanly and stay where they are. Nothing here decides
  * those last cases in advance. The tools ask the cluster (a simulation) and report what it says.
  */
-import {
-  addExtraAccountMetasForExecute,
-  createHarvestWithheldTokensToMintInstruction,
-  createTransferCheckedInstruction,
-  getTransferFeeAmount,
-  getTransferHook,
-  unpackAccount,
-  unpackMint,
-} from "@solana/spl-token";
-import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@lamport-robotics/vault";
-import { type AccountMeta, type Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
+import { createHarvestWithheldTokensToMintInstruction, getTransferFeeAmount, getTransferHook, unpackAccount, unpackMint } from "@solana/spl-token";
+import { resolveTransferHookAccounts, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@lamport-robotics/vault";
+import { type AccountMeta, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import { type Chain, COMMITMENT } from "./chain.ts";
 
 export const TOKEN_PROGRAMS: readonly PublicKey[] = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID];
@@ -82,19 +74,34 @@ export function harvestInstruction(holding: Pick<Holding, "address" | "mint">): 
 }
 
 /**
- * The accounts a transfer hook wants on top of a plain transfer, in the order the token program
- * expects them. `sweep_closed` and `claim_token` pass whatever follows their own accounts to the
- * token program untouched, so these go there. Empty for a mint with no hook.
+ * The accounts a transfer hook wants on top of a plain transfer: the ones its list names, its
+ * validation account and the hook program. `sweep_closed` and `claim_token` hand whatever follows
+ * their own accounts to the token program, so these go there. Empty for a mint with no hook.
+ *
+ * A hook is a program of the token issuer's that the token program runs on every transfer, and
+ * its list of accounts is the issuer's to write. Two rules keep that from costing whoever sends
+ * the transaction anything (lamport-vault, docs/DESIGN.md, "Transfer hooks"):
+ *
+ * - every account is unsigned, whatever the list asks for. Both programs pass none on as a signer
+ *   either, so a hook that cannot do without a signature fails the transfer and nothing moves;
+ * - if the list names one of `signers`, the keys that sign the transaction (the heir who claims,
+ *   the payer of a sweep), this throws, and the token is reported and left where it is. Whoever
+ *   signs a transaction signs all of it; their account is not put in front of a stranger's program.
  */
 export async function hookAccounts(
   chain: Chain,
   mint: MintFacts,
   transfer: { source: PublicKey; destination: PublicKey; authority: PublicKey; amount: bigint },
+  signers: readonly PublicKey[],
 ): Promise<AccountMeta[]> {
   if (!mint.hookProgram) return [];
-  const plain = createTransferCheckedInstruction(transfer.source, mint.address, transfer.destination, transfer.authority, transfer.amount, mint.decimals, [], mint.tokenProgram);
-  const base = plain.keys.length;
-  // The helper reads one account (the hook's list of extra accounts) and nothing else of a Connection.
-  await addExtraAccountMetasForExecute(chain as unknown as Connection, plain, mint.hookProgram, transfer.source, mint.address, transfer.destination, transfer.authority, transfer.amount, COMMITMENT);
-  return plain.keys.slice(base);
+  const accounts = await resolveTransferHookAccounts(chain, mint.hookProgram, { mint: mint.address, ...transfer }, { commitment: COMMITMENT });
+  const named = accounts.find((a) => signers.some((s) => s.equals(a.pubkey)));
+  if (named) {
+    throw new Error(
+      `the token's transfer hook asks for the account ${named.pubkey.toBase58()}, which signs this transaction. ` +
+        "A hook is a program of the token issuer's, and a signer's account is never handed to one",
+    );
+  }
+  return accounts;
 }

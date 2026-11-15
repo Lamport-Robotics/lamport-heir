@@ -65,7 +65,7 @@ keeps its rent (about 0.002 SOL) and stays claimable.
 | `init_plan(terms_hash, terms)` | payer (w), plan (w), vault, instructions sysvar, system program; then any heirs who sign | payer, and heirs who prove control by signing |
 | `activate()` | plan (w), vault | nobody |
 | `claim_sol(salt: Option<[u8;32]>)` | plan (w), heir (w) | the heir |
-| `claim_token(salt: Option<[u8;32]>, close_account: bool)` | plan (w), heir (w), plan's token account (w), destination token account (w), mint, token program; then anything the mint's transfer hook needs | the heir |
+| `claim_token(salt: Option<[u8;32]>, close_account: bool)` | plan (w), heir (w), plan's token account (w), destination token account (w), mint, token program; then the accounts of the mint's transfer hook, if it has one | the heir |
 
 In `claim_sol` and `claim_token` the fee payer may be someone other than the heir.
 
@@ -130,6 +130,47 @@ rent to the signer. Closing is the caller's choice because some accounts cannot 
 Token-2022 account holding withheld transfer fees has to be harvested first. The tokens can always be
 claimed with `close_account` unset and the empty account closed by a later call.
 
+### Tokens with a transfer hook
+
+A Token-2022 mint can name a transfer hook: a program of the issuer's that the token program calls
+on every transfer, and that can refuse it. The hook keeps a validation account, at
+`["extra-account-metas", mint]` of its own program, that lists further accounts it wants. A
+transfer goes through only when the token program is handed the hook program, the validation
+account and the accounts on that list.
+
+`claim_token` hands every account after its own six to the token program, in the order given:
+
+- **never as a signer**, whoever signed the transaction;
+- **writable only if the transaction made it writable**.
+
+The plan signs for the authority, and for nothing else. This is the call lamport-vault makes for
+a vault's own tokens, for the same reasons (its `docs/DESIGN.md`, "Transfer hooks"):
+
+- The accounts are chosen by whoever sends the claim, and they cannot change what moves: the whole
+  balance of the plan's account goes to an account the signing heir owns, or nothing does.
+- The token program validates them, not this program. It reads the mint, finds the hook's own
+  list and picks the listed accounts out by address. Anything else goes no further; a missing or
+  wrong account fails the claim, and nothing moves. For a mint without a hook, and under the
+  original Token program, the accounts are not read at all, so such claims are what they were.
+- The heir signs every claim and usually pays for it, and whoever signs a transaction signs all
+  of it. A hook's list is the issuer's to write and can name the heir, asking for a writable
+  signer; a hook handed that could move the heir's SOL as the price of collecting. Since nothing
+  is passed on as a signer, the token program has no signature to give. A hook that cannot do
+  without one fails the claim, and that token stays in the plan.
+- The plan's own signature goes to the token program, which hands the hook the authority
+  read-only and unsigned. A hook cannot call back into this program while a claim runs.
+- `init_plan` reads its own extra accounts for something else: an heir who signed that
+  transaction. The two cannot meet. An instruction sees only its own accounts, and a hook, which
+  is never given a signature here, has none to show `init_plan`.
+
+A hook that refuses fails the claim whole: no token moves and the contingent heir's clock is not
+touched. The SOL and every other token are claimed as usual.
+
+The program grew by 152 bytes for this (272 664 against 272 512, local builds). In LiteSVM the same
+claim of a mint without a hook costs 119 compute units less than before (5 753 against 5 872 for
+SPL Token, 7 439 against 7 558 for Token-2022), and a claim of a hook mint that also closes the
+account took 33 427, about 5 400 of them in the test fixture's hook.
+
 ## Errors
 
 | code | name | |
@@ -160,6 +201,7 @@ claimed with `close_account` unset and the empty account closed by a later call.
 ```sh
 cargo test --workspace                                              # unit tests, on the host
 cargo build-sbf --manifest-path programs/heir-claim/Cargo.toml     # target/deploy/heir_claim.so
+cargo build-sbf --manifest-path vendor/lamport-vault/tests/hook-fixture/Cargo.toml   # the transfer hook tests/hook.rs loads
 cd tests/svm && cargo test                                          # the built program in LiteSVM
 ```
 
@@ -168,7 +210,10 @@ the version `programs/heir-claim/Cargo.toml` pins. The LiteSVM tests load the `.
 Most of them fabricate the vault's accounts (an open vault, a tombstone). `tests/release.rs` does
 not: there the Heir-enabled vault program itself, built from the pinned submodule, runs beside the
 claim program, and the claim program reads what the vault program wrote. Build both first with
-`node tools/scripts/build-programs.mjs`.
+`node tools/scripts/build-programs.mjs`. `tests/hook.rs` makes real Token-2022 mints whose
+transfer hook is the vault's test fixture, a small program from the same submodule that is
+deployed nowhere; once it loads that fixture in the token program's place, to read what
+`claim_token` hands the token program.
 
 The program also has a `short-clocks` test build (own program id, a day lasts one second) for the
 end-to-end run on a local validator and for devnet: [`release-tools.md`](release-tools.md).

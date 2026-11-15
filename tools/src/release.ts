@@ -261,7 +261,8 @@ export async function finish(chain: Chain, payer: AnySigner, address: PublicKey,
         record({ ...step, skipped: `the claim address has no account for this mint and this run's limit of ${opts.maxNewTokenAccounts} new token accounts is used up; anyone can sweep it later` });
         continue;
       }
-      const extraAccounts = await hookAccounts(chain, mint, { source: h.address, destination, authority: vault, amount: h.amount });
+      // anyone may sweep, on a token they know nothing about: a hook whose list names the payer is not served
+      const extraAccounts = await hookAccounts(chain, mint, { source: h.address, destination, authority: vault, amount: h.amount }, [payer.publicKey]);
       const sweep = sweepClosedInstruction({ programId: programs.vault, payer: payer.publicKey, vault, heir: claim, mint: h.mint, vaultTokenAccount: h.address, tokenProgram: h.tokenProgram, extraAccounts });
       const instructions = h.withheld > 0n ? [harvestInstruction(h), sweep.instruction] : [sweep.instruction];
       const done = await attempt(chain, payer, [], instructions, step, { dryRun: opts.dryRun, computeUnits: SWEEP_COMPUTE_UNITS });

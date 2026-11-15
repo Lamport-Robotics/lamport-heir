@@ -18,6 +18,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, "programs", "heir-claim", "src")
 BUILD = "cargo build-sbf --manifest-path programs/heir-claim/Cargo.toml"
+# the program tests/hook.rs loads next to the claim program: a transfer hook, from the vault's
+# repository; built once, never mutated
+FIXTURE = "cargo build-sbf --manifest-path vendor/lamport-vault/tests/hook-fixture/Cargo.toml"
 
 # (what the mutant does, file, text to find exactly once, replacement)
 MUTANTS = [
@@ -38,6 +41,11 @@ MUTANTS = [
  ("message accepted if it merely ends with the text", "proof.rs", "        && signed.starts_with(OFFCHAIN_DOMAIN)\n", ""),
  ("terms_hash unchecked", "lib.rs", "        require!(terms_hash == terms.hash(), ClaimError::TermsHashMismatch);\n", ""),
  ("second activate restarts everything", "lib.rs", "        if plan.activated {\n            return Ok(());\n        }\n", ""),
+ ("a transfer hook's accounts are dropped, so a hook mint stays in the plan for ever", "lib.rs", "    for account in extra {\n", "    for account in extra.iter().take(0) {\n"),
+ ("a transfer hook's accounts keep the signer flag the transaction gave them", "lib.rs", "        ix.accounts.push(AccountMeta { pubkey: account.key(), is_signer: false, is_writable: account.is_writable });\n", "        ix.accounts.push(AccountMeta { pubkey: account.key(), is_signer: account.is_signer, is_writable: account.is_writable });\n"),
+ ("every transfer hook account is passed writable", "lib.rs", "        ix.accounts.push(AccountMeta { pubkey: account.key(), is_signer: false, is_writable: account.is_writable });\n", "        ix.accounts.push(AccountMeta { pubkey: account.key(), is_signer: false, is_writable: true });\n"),
+ ("every transfer hook account is passed read-only", "lib.rs", "        ix.accounts.push(AccountMeta { pubkey: account.key(), is_signer: false, is_writable: account.is_writable });\n", "        ix.accounts.push(AccountMeta { pubkey: account.key(), is_signer: false, is_writable: false });\n"),
+ ("a transfer hook's accounts are named to the token program but not handed over", "lib.rs", "        infos.push(account.clone());\n", ""),
  ("vault account not tied to the terms at activate", "lib.rs", "    #[account(address = plan.terms.vault @ ClaimError::WrongVault)]\n    pub vault: UncheckedAccount<'info>,\n}\n\n#[derive(Accounts)]\npub struct ClaimSol", "    pub vault: UncheckedAccount<'info>,\n}\n\n#[derive(Accounts)]\npub struct ClaimSol"),
  ("contingent delay floor dropped", "state.rs", "                    (MIN_CONTINGENT_DELAY_SECS..=MAX_CONTINGENT_DELAY_SECS).contains(&self.contingent_delay_secs),", "                    self.contingent_delay_secs <= MAX_CONTINGENT_DELAY_SECS,"),
  ("a hashed heir matches without its salt", "state.rs", "                None => false,\n", "                None => true,\n"),
@@ -65,6 +73,10 @@ def main():
     build = sh(BUILD, ROOT)
     if build.returncode != 0:
         print("the untouched program does not build:", build.stderr[-400:])
+        return 1
+    fixture = sh(FIXTURE, ROOT)
+    if fixture.returncode != 0:
+        print("the transfer-hook fixture does not build:", fixture.stderr[-400:])
         return 1
     ran, failed = ran_and_failed(sh("cargo test 2>&1", os.path.join(ROOT, "tests", "svm")).stdout)
     if ran == 0 or failed:

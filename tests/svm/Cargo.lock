@@ -1436,6 +1436,8 @@ dependencies = [
  "solana-sysvar",
  "solana-transaction",
  "solana-transaction-error",
+ "spl-associated-token-account-interface",
+ "spl-token-2022-interface",
 ]
 
 [[package]]
