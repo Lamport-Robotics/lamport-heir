@@ -40,12 +40,23 @@ project owner outside every repository.
 
 ## Deployed
 
-Nothing yet, on any cluster.
+On devnet, the pair with real durations. Nothing on mainnet, and the `short-clocks` test pair is
+deployed nowhere.
 
 | cluster | program | id | deployed | sha256 of the program file | upgrade authority |
 |---|---|---|---|---|---|
+| devnet | Heir-enabled vault | `3mJU9ozZByXsHavMGfzdwDLFs9YuFaMA3jabaLwczxAV` | 2026-11-17, slot 523426265 | `848bc48ae379c081a5103a814b0170261d75ea40ebe06104eb6a5187ceb85ec8` | `4ARvLemSynLjt82WaBvcyS93E7PB5ZdSwR2HwQgiRBcg` |
+| devnet | `heir-claim` | `cvxRorjDzekSCcAyiinzgALnBT1dTuUdVvEraPeDkUW` | 2026-11-17, slot 523426342 | `3d8ac4d46db1e5f782ab06ddaf8f3dd6e3d7aefe1be518c747c882c4dc630fac` | `4ARvLemSynLjt82WaBvcyS93E7PB5ZdSwR2HwQgiRBcg` |
 
-Devnet only. Mainnet is the project owner's decision, after an audit.
+Both files are builds of the `verify` workflows, made in a pinned Docker image, and not a
+laptop's: the vault is the artifact `lamport_vault-heir` of lamport-vault at `989f8db` (the commit
+`vendor/lamport-vault` is pinned to), the claim program the artifact `heir_claim` of this
+repository at `d59af17`. The hash is the one those runs printed and the one
+`solana-verify get-program-hash --url devnet <id>` prints: sha256 of the program with trailing
+zero bytes trimmed. A `devnet-<x>` tag here makes CI compare the claim program with devnet.
+
+Both are upgradeable by the devnet deployer key, like the vault's own devnet programs. Nothing is
+on mainnet ([`mainnet.md`](mainnet.md)).
 
 ## Keys
 

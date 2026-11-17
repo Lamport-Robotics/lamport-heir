@@ -3,7 +3,10 @@
 The commit to audit is the one tagged `audit-1`; this file is part of it. Two things to know
 before anything else: the whole cycle (arm, go quiet, warn, start, release, sweep, claim) has run
 against a local validator, on every push, and **never on devnet**, by the project owner's
-decision ([`../devnet.md`](../devnet.md)); and **nothing is deployed anywhere**.
+decision ([`../devnet.md`](../devnet.md)); and at `audit-1` nothing was deployed anywhere. Since
+2026-11-17 the pair with real durations is on devnet ([`../program-ids.md`](../program-ids.md)),
+built from commits later than `audit-1`: the handling of tokens with a transfer hook and the
+mainnet ids came after the tag.
 
 Nothing here has been audited. Two reviewers who had not seen the code read both programs before
 they were merged; a third read the pages, the offline signer's Heir build and the reminder
@@ -60,7 +63,8 @@ node tools/scripts/build-programs.mjs     # needs Agave 2.3.x; platform-tools v1
 | the vault's own page and signer (lamport-vault `web/dist/`) | the Heir build left them byte for byte what they were, and the `web` job in lamport-vault checks that no Heir code is in them; they changed once since, by the signer fix in lamport-vault#10 |
 
 Program ids have deployment keypairs, kept by the project owner outside every repository
-([`../program-ids.md`](../program-ids.md)). Nothing is deployed at them yet.
+([`../program-ids.md`](../program-ids.md)). The pair with real durations is deployed on devnet;
+nothing else is deployed.
 
 ## What must hold, and what holds it
 

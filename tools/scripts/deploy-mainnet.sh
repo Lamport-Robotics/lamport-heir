@@ -6,9 +6,10 @@
 #   scripts/deploy-mainnet.sh --deploy   deploys what is not on chain yet, then checks it
 #   scripts/deploy-mainnet.sh --burn     removes the upgrade authority of each program. Cannot be undone.
 #
-# This is the project owner's to run. --deploy spends real SOL from the deployer wallet as rent
-# that never comes back, and after --burn nobody, the owner included, can change the code: a bug
-# is then fixed only by new programs that people move to.
+# This is the project owner's to run. --deploy spends real SOL from the deployer wallet as rent.
+# Until --burn that rent can be had back, by closing a program, which ends its id for good; after
+# --burn it never comes back and nobody, the owner included, can change the code: a bug is then
+# fixed only by new programs that people move to.
 #
 # The programs (docs/program-ids.md, and lamport-vault's docs/VERIFY.md):
 #

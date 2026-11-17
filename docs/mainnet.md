@@ -10,7 +10,9 @@ The record of what is deployed is the table in [`program-ids.md`](program-ids.md
 - A whole cycle (arm, go quiet, warn, start, release, sweep, claim) has run against a local
   validator with the `short-clocks` builds, in CI on every push. It has not run on a public
   cluster, devnet included ([`devnet.md`](devnet.md)).
-- The programs with real durations have never been deployed on a public cluster. The four CI
+- The programs with real durations are on devnet since 2026-11-17, as devnet builds
+  ([`program-ids.md`](program-ids.md)); no vault there has been released. The mainnet builds
+  have never been on a public cluster. The four CI
   builds that `deploy-mainnet.sh` deploys were put on a local validator with a copy of that script
   that differed only in the cluster it accepts: each landed with the hash CI printed, each answers
   at its mainnet id, and `--burn` left each without an upgrade authority. That rehearses the
@@ -45,9 +47,14 @@ scripts/deploy-mainnet.sh --burn     # removes each program's upgrade authority.
 
 - It deploys the artifacts of the `verify` workflows, for lamport-heir's `main` and for the
   lamport-vault commit it pins. Never a local build.
-- `--deploy` spends SOL from the deployer wallet as rent, which does not come back: about 2 SOL
+- `--deploy` spends SOL from the deployer wallet as rent: about 2 SOL
   for the Heir-enabled vault, 1.4 for the claim program, 1.8 for the vault and 1.3 for the
   registry at the time of writing. The script prints the exact figures before sending anything.
+  Until `--burn`, a program's rent can be had back by closing the program
+  (`solana program close`), which ends that id for good. After `--burn` it never comes back.
+- Give it a provider's endpoint in `LAMPORT_MAINNET_RPC`. The script sends its writes through
+  the endpoint (`--use-rpc`), and on devnet the public endpoint let about 30 of 380 through in
+  ten minutes before the tool gave up (2026-11-17).
 - Between `--deploy` and `--burn` the deployer wallet can still replace the programs. After
   `--burn` nobody can: a bug is then fixed only by new programs under new ids, and by people
   moving to them (`Close` and recreate, for a vault).

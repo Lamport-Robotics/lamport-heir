@@ -2,7 +2,8 @@
 
 The spec ends milestone 4 with one whole cycle on devnet, with short durations: arm, go quiet,
 warn, start, release, sweep, claim. Everything for it is in the repository, and it runs against a
-local validator on every push. **It has not run on devnet, and nothing is deployed there.** On
+local validator on every push. **It has not run on devnet.** What is on devnet, since 2026-11-17,
+is the pair with real durations, which the pages talk to; no vault there has been released. On
 2026-11-14 the project owner decided not to wait for a devnet test run
 ([`decisions.md`](decisions.md), "From the project owner"), and milestone 4 was merged on the
 local runs.
@@ -12,14 +13,36 @@ A deployment needs test SOL. Devnet's command-line faucet is closed (`requestAir
 not to use it, so a person has to request it. The pages cannot be served before the pair with
 real durations is on devnet: they would be pages for programs that do not exist.
 
-## What to do
+## The pair with real durations
 
-For the pages, only the pair with real durations is needed: 5 SOL on
-<https://faucet.solana.com> for the deployer address,
-`4ARvLemSynLjt82WaBvcyS93E7PB5ZdSwR2HwQgiRBcg`, then `scripts/deploy-devnet.sh --real`, then
-"Putting the pages on the site" below.
+Deployed on 2026-11-17, after the project owner requested 5 test SOL on
+<https://faucet.solana.com> for the deployer address, `4ARvLemSynLjt82WaBvcyS93E7PB5ZdSwR2HwQgiRBcg`.
+The two programs took 3.35 SOL of rent. Ids, slots and hashes are in
+[`program-ids.md`](program-ids.md).
 
-The test run, should anyone want it, is the rest of this list and another 5 SOL:
+What is deployed is not a laptop's build. A Mac makes a different file from the same source (the
+claim program: 272,664 bytes there, 273,240 from CI), and nobody could check such a file
+against the source. The files are the artifacts of the `verify` workflows, which build in a
+pinned Docker image: `heir_claim-<commit>` from this repository, and
+`lamport_vault-heir-<commit>` from lamport-vault at the commit `vendor/lamport-vault` is pinned
+to. To do it again:
+
+```sh
+gh run download --repo Lamport-Robotics/lamport-heir  --name heir_claim-<commit>         --dir builds
+gh run download --repo Lamport-Robotics/lamport-vault --name lamport_vault-heir-<commit> --dir builds
+cd tools && LAMPORT_HEIR_DEVNET_BUILDS="$PWD/../builds" scripts/deploy-devnet.sh --real
+```
+
+The script says `same` for a program that is already there as that file, and sends nothing for
+it. On the day, the first attempt sent its writes through the public endpoint and landed about
+30 of 380 in ten minutes before the tool gave up; sent straight to the validators, which is what
+the script does now, the vault took eight seconds and the claim program eighteen. A call to each
+program, simulated, is answered by the program itself at its id.
+
+## The test pair and the cycle
+
+Not deployed. The test run, should anyone want it, is this list and about 3.4 SOL, of which the
+deployer holds 1.64:
 
 1. **Test SOL**, as above.
 2. **Deploy the test pair.**
@@ -98,7 +121,7 @@ The run cost the paying key 0.0082 SOL.
 
 ### On devnet
 
-Not run. The project owner decided on 2026-11-14 not to wait for it.
+Not run: the test pair is not deployed. The project owner decided on 2026-11-14 not to wait for it.
 
 ## Putting the pages on the site
 
@@ -136,4 +159,16 @@ Then `caddy validate` and `caddy reload`. The script's last check fails until th
 The signer's own page also carries a stricter policy inside the file, with the hash of its one
 script, so the header above only has to let that script run.
 
-**Published: nothing yet.** It waits for the programs.
+**Published on 2026-11-17**, from commit `d59af17`, at <https://vault.lamportrobotics.com/heir/>:
+
+| file | sha256 |
+|---|---|
+| `index.html` | `30024aeed8a7dadf7ff47f508d254d0c3a34c8d4008e36decfbcfa338e81c1d1` |
+| `signer.html` | `a2b2f297969e05e249909be075793917a1c34c4f7d2cb8255bb0aada32817791` |
+| `claim.html` | `000e2abb5092edd29ea62541a2ba3573a2771a4a6d7bd2063b9ea18673048b2c` |
+
+The script fetched all eighteen files back and found each the same as the build, and the
+signer served with its own policy; the Caddyfile lines above went in the same day. In a browser,
+both pages load with no error in the console, and the heirs' page looked an address up through
+the site's `/rpc`. Nobody has yet made a vault or a plan there with a real wallet. The vault's
+own pages do not link to `/heir/` yet.

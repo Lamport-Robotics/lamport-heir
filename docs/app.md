@@ -273,7 +273,7 @@ bound the vault's own program id; the chain refused it).
 
 ## Not done
 
-- Nothing is deployed, on devnet or on the site.
+- Nothing is on mainnet. The pages on the site are the devnet build ([`devnet.md`](devnet.md)).
 - Reminders are not wired into the page (the service has no public address yet).
 - The family letter is a file the owner hands over. Nothing stores it for them or delivers it at
   the release, and the owner cannot open a sealed one again.

@@ -4,6 +4,10 @@
 #   scripts/deploy-devnet.sh            the short-clocks TEST pair (a day lasts a second)
 #   scripts/deploy-devnet.sh --real     the pair with real durations
 #
+# With --real, LAMPORT_HEIR_DEVNET_BUILDS names a folder holding the lamport_vault.so and heir_claim.so
+# to deploy, in place of target/deploy. The pair people use is deployed from the builds of the `verify`
+# workflows, which anyone can reproduce, and not from a laptop's (docs/devnet.md).
+#
 # Devnet only: the script refuses any other cluster. Running it again is safe: a program that is
 # already on chain as the file that was built is left alone. It needs the Solana CLI, python3, the programs built
 # (`npm run build:programs`), and the deployment keys in $LAMPORT_HEIR_DEVNET_KEYS (default
@@ -24,7 +28,7 @@ KEYS="${LAMPORT_HEIR_DEVNET_KEYS:-$HOME/.config/lamport/heir-devnet}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 if [ "${1:-}" = "--real" ]; then
-  DIR="$ROOT/target/deploy"; VAULT_KEY="$KEYS/vault.json"; CLAIM_KEY="$KEYS/claim.json"; WHAT="real durations"
+  DIR="${LAMPORT_HEIR_DEVNET_BUILDS:-$ROOT/target/deploy}"; VAULT_KEY="$KEYS/vault.json"; CLAIM_KEY="$KEYS/claim.json"; WHAT="real durations"
   VAULT_ID=$(grep -o 'LAMPORT_VAULT_HEIR_PROGRAM_ID = new PublicKey("[^"]*' "$ROOT/vendor/lamport-vault/sdk/packages/vault/src/succession.ts" | cut -d'"' -f2)
   CLAIM_ID=$(grep -o 'HEIR_CLAIM_PROGRAM_ID = new PublicKey("[^"]*' "$ROOT/tools/src/programs.ts" | cut -d'"' -f2)
 else
@@ -118,8 +122,11 @@ deploy() { # <program key file> <id> <so> <state>
   else
     local buffer; buffer="$KEYS/buffer-$(basename "$1")"
     [ -f "$buffer" ] || { solana-keygen new --no-bip39-passphrase --silent --outfile "$buffer" >/dev/null 2>&1; chmod 600 "$buffer"; }
+    # Sent straight to the validators, the tool's default. Through the public endpoint (--use-rpc) about 30
+    # of 380 writes landed in ten minutes on 2026-11-17 and the tool gave up; resumed this way, the same
+    # deploy took eight seconds.
     solana program deploy --url "$URL" --keypair "$KEYS/deployer.json" --program-id "$1" --upgrade-authority "$KEYS/deployer.json" \
-      --buffer "$buffer" --max-sign-attempts 60 --use-rpc "$3"
+      --buffer "$buffer" --max-sign-attempts 60 "$3"
     rm -f "$buffer" # the buffer became the program: its key is of no further use
   fi
   # the endpoint may be a moment behind the deploy it just confirmed
