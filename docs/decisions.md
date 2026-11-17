@@ -286,10 +286,9 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
 
 ## Still the project owner's
 
-- Test SOL for the devnet deployment of the pair the pages talk to. The keys exist (2026-11-13,
-  with the owner's word) and the ids are in the source, but devnet's command-line faucet is
-  closed and its web faucet does not serve automated clients: about 5 SOL has to be requested by
-  a person. Until then nothing is deployed and the pages are served nowhere.
+- Test SOL for anything more on devnet. Its command-line faucet is closed and its web faucet does
+  not serve automated clients, so a person has to request it. The test pair, and with it the
+  spec's cycle on devnet, would need about 3.4 SOL; the deployer holds 1.64.
 - Anything on mainnet, and any real funds.
 - Counsel on estates, money transmission and wording, before anyone outside is told to rely on this.
 - Merging, except where the owner has said otherwise: on 2026-11-13 he told the builder to review
@@ -304,3 +303,10 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
 - **2026-11-15: tokens with a transfer hook, before mainnet.** lamport-vault#8 is merged, so that
   such tokens can leave a vault, and the claim program hands a hook's accounts on in the same way.
   After the upgrade authority is removed neither could have been fixed.
+- **2026-11-16: mainnet is not funded.** Told what a mainnet deployment costs in rent (6.42 SOL
+  for the four programs, 3.35 for the Heir pair), the owner decided not to spend it. Nothing is
+  on mainnet. What [`mainnet.md`](mainnet.md) describes is merged and rehearsed, and unused.
+- **2026-11-17: devnet.** The owner requested 5 test SOL from the faucet for the devnet deployer.
+  The pair with real durations was deployed that day, from the builds CI makes, and the pages
+  were published under `/heir/` on the vault's site ([`devnet.md`](devnet.md),
+  [`program-ids.md`](program-ids.md)).

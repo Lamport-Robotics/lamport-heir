@@ -8,14 +8,15 @@ waiting period. Any signature or check-in from the owner cancels it. If none com
 releases to a claim account, and only the heirs the owner named can withdraw from it. The same plan
 arms and watches Pincer1's own dead-man's switch for the robot's wallet.
 
-**Status: milestones 0 to 6 are built and merged. Nothing is deployed.** The claim program, the
-vault's inactivity clock, the finisher, the claim tool and kit, the pages, the offline signer's
-Heir build, the reminder service and the Pincer1 link are tested here on every push, including
-one whole cycle against a local validator: arm, go quiet, warn, start, release, sweep, claim.
-That cycle has not run on devnet, by the project owner's decision
-([`docs/decisions.md`](docs/decisions.md)), and the pages are served nowhere until the programs
-are on devnet ([`docs/devnet.md`](docs/devnet.md)). Local validators and devnet only. **Nothing
-in this repository is audited**; [`docs/audit/README.md`](docs/audit/README.md) is written for
+**Status: milestones 0 to 6 are built and merged. Since 2026-11-17 the programs are on devnet and
+the pages are served at <https://vault.lamportrobotics.com/heir/>: devnet, test SOL only.** The
+claim program, the vault's inactivity clock, the finisher, the claim tool and kit, the pages, the
+offline signer's Heir build, the reminder service and the Pincer1 link are tested here on every
+push, including one whole cycle against a local validator: arm, go quiet, warn, start, release,
+sweep, claim. That cycle has not run on devnet, by the project owner's decision
+([`docs/decisions.md`](docs/decisions.md)): the programs there have real durations, and no vault
+on devnet has been released or claimed from ([`docs/devnet.md`](docs/devnet.md)). Nothing is on
+mainnet. **Nothing in this repository is audited**; [`docs/audit/README.md`](docs/audit/README.md) is written for
 whoever audits it.
 
 - Spec: [Lamport Heir spec](https://claude.ai/artifact/G1AFWhoqMZqufobPxZRNuC)
@@ -28,7 +29,7 @@ whoever audits it.
 - The pages: the owner's Inheritance tab, the offline signer that checks who inherits, and the
   heirs' page: [`docs/app.md`](docs/app.md)
 - The reminder service: [`docs/reminders.md`](docs/reminders.md)
-- Devnet: what is deployed (nothing yet), how to deploy, and the cycle that is milestone 4's
+- Devnet: what is deployed, how it was deployed, and the cycle that is milestone 4's
   gate: [`docs/devnet.md`](docs/devnet.md)
 - Mainnet: the ids, how a deployment is made, and what has and has not been checked (nothing is
   deployed there): [`docs/mainnet.md`](docs/mainnet.md)

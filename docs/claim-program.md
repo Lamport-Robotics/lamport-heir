@@ -13,7 +13,7 @@ heir does not.
   heir the terms name, and each works only after the vault's own tombstone says it released to this
   plan.
 
-Not deployed anywhere. Not audited.
+Deployed on devnet ([`program-ids.md`](program-ids.md)) and nowhere else. Not audited.
 
 ## A plan and its terms
 
