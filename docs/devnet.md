@@ -27,8 +27,9 @@ The test run, should anyone want it, is the rest of this list and another 5 SOL:
    cd tools && npm run build:programs && scripts/deploy-devnet.sh
    ```
    The script refuses any cluster but devnet, checks that each key file is the key of the id the
-   source declares, checks the balance, deploys both programs, downloads what landed and compares
-   it with the file that was built.
+   source declares, checks the balance, deploys both programs, reads what landed and compares it
+   with the file that was built. Running it again is safe: a program that is already on chain as
+   that file is left alone, and a deploy the network interrupted carries on where it stopped.
 3. **Run the cycle.**
    ```sh
    node scripts/cycle.ts --rpc https://api.devnet.solana.com --keypair ~/.config/lamport/heir-devnet/deployer.json --out cycle.json
