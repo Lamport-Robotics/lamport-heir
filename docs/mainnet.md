@@ -17,7 +17,10 @@ The record of what is deployed is the table in [`program-ids.md`](program-ids.md
   that differed only in the cluster it accepts: each landed with the hash CI printed, each answers
   at its mainnet id, and `--burn` left each without an upgrade authority. That rehearses the
   script, not the programs: no vault was made there. On 2026-11-18 the two ways of sending
-  (below) were rehearsed the same way, at throwaway ids.
+  (below) were rehearsed the same way, at throwaway ids, and the four builds were deployed on a
+  local validator started with mainnet's own set of active features
+  (`solana-test-validator --clone-feature-set`, Agave 4.4.1; mainnet answered as 4.4.0 that day).
+  The script ran with the 2.3.13 command-line tools and with 4.4.1.
 
 ## The programs
 
@@ -53,6 +56,20 @@ scripts/deploy-mainnet.sh --burn     # removes each program's upgrade authority.
   registry at the time of writing. The script prints the exact figures before sending anything.
   Until `--burn`, a program's rent can be had back by closing the program
   (`solana program close`), which ends that id for good. After `--burn` it never comes back.
+- Rent is 5,080 lamports for each byte on mainnet since epoch 1033; it was 6,960, then 6,333.
+  Three more cuts are in the validators and not switched on, to 2,575, 1,322 and 696
+  (SIMD-0437-3 to -5), and nobody has given a date. At 2,575 the four programs would take about
+  3.25 SOL and the Heir pair 1.70; at 696, about 0.88 and 0.46.
+- The builds are SBPF v0, which is what the pinned toolchain makes, and mainnet deploys such
+  programs today. A feature that is in the validators and not switched on ends that: SIMD-0500,
+  "Disable deployment of SBPF v0, v1 and v2 programs" (`B8JJXCy5amZyWG9r7EnUYLwzXSXTxG7GZ1qZ1qggo83g`).
+  On a local validator with every feature on, a deploy of these builds failed at its last
+  transaction (`invalid account data for instruction`), with the whole program already written
+  to a buffer; with that one feature off it went through. The script asks the cluster first and
+  sends nothing where the feature is active. From that day on, whatever is not yet on mainnet
+  has to be rebuilt as SBPF v3 with a newer toolchain: other files with other hashes, to be
+  tested again. By its title the feature is about deploying, an upgrade included, and not about
+  programs that are already there.
 - A deploy is a few hundred writes, and `LAMPORT_MAINNET_SEND` says how they are sent.
   `validators`, the default, sends them straight to the validators, as the command-line tool
   does by default: on devnet a program took seconds that way, where the public endpoint had let

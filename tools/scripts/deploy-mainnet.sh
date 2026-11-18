@@ -110,6 +110,32 @@ rows() { table | while IFS= read -r row; do case " $wanted " in *" ${row%%|*} "*
 say "the cluster"
 [ "$(solana genesis-hash --url "$URL")" = "$MAINNET_GENESIS" ] || fail "$URL is not mainnet"
 echo "mainnet-beta, through $URL"
+# The builds are SBPF v0. A cluster on which SIMD-0500 is active refuses to deploy them, and a deploy
+# learns it at the last of its few hundred transactions, with the rent already in a buffer. So the
+# cluster is asked first: a feature is an account, absent until it is scheduled.
+SIMD_0500=B8JJXCy5amZyWG9r7EnUYLwzXSXTxG7GZ1qZ1qggo83g
+sbpf_rule="$(python3 -I - "$URL" "$SIMD_0500" <<'PY'
+import base64, json, sys, urllib.request
+url, feature = sys.argv[1:3]
+body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "getAccountInfo", "params": [feature, {"encoding": "base64", "commitment": "confirmed"}]}).encode()
+request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+answer = json.load(urllib.request.urlopen(request, timeout=120))
+if "result" not in answer:
+    sys.exit(f"the endpoint did not answer for {feature}: {answer.get('error')}")
+value = answer["result"]["value"]
+if value is None:
+    print("off")
+else:
+    # a feature account holds Option<u64>: the slot it became active at, once it has
+    print("active" if base64.b64decode(value["data"][0])[:1] == bytes([1]) else "scheduled")
+PY
+)" || exit 1
+case "$sbpf_rule" in
+  off) echo "SIMD-0500 is not active: the cluster deploys builds like these (SBPF v0)" ;;
+  scheduled) echo "WARNING: SIMD-0500 is scheduled and takes effect at the next epoch. From then on these builds (SBPF v0) cannot be deployed." ;;
+  active) echo "WARNING: SIMD-0500 is active: the cluster refuses to deploy these builds (SBPF v0). What is not on chain yet has to be rebuilt first (docs/mainnet.md)." ;;
+  *) fail "could not read whether SIMD-0500 is active" ;;
+esac
 
 say "the commits"
 [ -z "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ] || fail "this checkout has changes in no commit; a deployment is of a commit anyone can check out"
@@ -267,6 +293,7 @@ fi
 if [ "$mode" = deploy ]; then
   [ "$need" -gt 0 ] || { echo; echo "Everything named is already on chain."; rm -f "$state_file"; exit 0; }
   [ "$balance" -ge "$(( need + margin ))" ] || fail "the deployer does not hold enough for the rent and the fees"
+  [ "$sbpf_rule" != active ] || fail "SIMD-0500 is active on this cluster: it would refuse these builds at the last step of a deploy. Nothing was sent."
   rows | while IFS='|' read -r name repo prefix file id _; do
     grep -q "^$name absent " "$state_file" || continue
     so="$(so_of "$repo" "$prefix" "$file")"
