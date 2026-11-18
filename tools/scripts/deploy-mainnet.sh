@@ -31,11 +31,40 @@
 # there too, so that a deploy the network interrupted is resumed by running --deploy again, and
 # the command-line tool has no recovery phrase to print.
 #
-# LAMPORT_MAINNET_RPC is the endpoint (default the public one, which is slow and rate-limited for
-# the few hundred transactions a deploy takes: a provider's endpoint is better).
+# LAMPORT_MAINNET_RPC is the endpoint the chain is read through (default the public one). If its
+# address carries a key, the key is never shown: everything this script and the tools it runs
+# print passes a filter that leaves the endpoint's scheme and host and nothing else of it.
+#
+# LAMPORT_MAINNET_SEND says how the few hundred writes of a deploy are sent:
+#   validators   straight to the validators, the command-line tool's own default, and the default
+#                here. On devnet, 2026-11-17, a program took seconds this way where the public
+#                endpoint had let about 30 of 380 writes through in ten minutes.
+#   rpc          through the endpoint (--use-rpc): for a provider that forwards with stake, on a
+#                plan that allows a few hundred sends a minute. Refused for the public endpoint.
+# A deploy that stops half way loses nothing: --deploy again carries on from its buffer, with
+# either setting.
 set -euo pipefail
 
-URL="${LAMPORT_MAINNET_RPC:-https://api.mainnet-beta.solana.com}"
+PUBLIC_URL=https://api.mainnet-beta.solana.com
+URL="${LAMPORT_MAINNET_RPC:-$PUBLIC_URL}"
+# all of the endpoint that is ever printed: its scheme and host
+SHOWN_URL="$(printf '%s' "$URL" | sed -E 's#^([a-z]+://[^/?]+).*$#\1#')"
+hide() {
+  HIDE_URL="$URL" HIDE_AS="$SHOWN_URL" python3 -I -u -c '
+import os, re, sys
+url, shown = os.environ["HIDE_URL"], os.environ["HIDE_AS"]
+for line in sys.stdin:
+    line = line.replace(url, shown)
+    line = re.sub(r"((?:api[-_]?key|access[-_]?token|token)=)[^&\s\")]+", r"\1<hidden>", line, flags=re.I)
+    sys.stdout.write(line)
+    sys.stdout.flush()
+'
+}
+# the script runs itself once more with everything it prints, errors included, passing that filter
+if [ -z "${LAMPORT_MAINNET_FILTERED:-}" ]; then
+  LAMPORT_MAINNET_FILTERED=1 bash "$0" "$@" 2>&1 | hide
+  exit "${PIPESTATUS[0]}"
+fi
 MAINNET_GENESIS=5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d
 KEYS="${LAMPORT_MAINNET_KEYS:-$HOME/.config/lamport/mainnet}"
 CU_PRICE="${LAMPORT_MAINNET_CU_PRICE:-20000}" # micro-lamports per compute unit, so the writes land
@@ -55,6 +84,15 @@ done
 fail() { echo "deploy-mainnet: $*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 for tool in solana solana-keygen gh python3 git; do command -v "$tool" >/dev/null 2>&1 || fail "$tool is not on PATH"; done
+SEND="${LAMPORT_MAINNET_SEND:-validators}"
+case "$SEND" in
+  validators) use_rpc=""; how="straight to the validators" ;;
+  rpc) use_rpc="--use-rpc"; how="through the endpoint" ;;
+  *) fail "LAMPORT_MAINNET_SEND is \"$SEND\": it is validators or rpc" ;;
+esac
+if [ "$SEND" = rpc ] && [ "$URL" = "$PUBLIC_URL" ]; then
+  fail "LAMPORT_MAINNET_SEND=rpc needs a provider's endpoint in LAMPORT_MAINNET_RPC: the public one lets too few writes through"
+fi
 
 # name | repository | artifact prefix | file in the artifact | program id | the devnet id the same source declares without `mainnet`
 table() {
@@ -72,6 +110,32 @@ rows() { table | while IFS= read -r row; do case " $wanted " in *" ${row%%|*} "*
 say "the cluster"
 [ "$(solana genesis-hash --url "$URL")" = "$MAINNET_GENESIS" ] || fail "$URL is not mainnet"
 echo "mainnet-beta, through $URL"
+# The builds are SBPF v0. A cluster on which SIMD-0500 is active refuses to deploy them, and a deploy
+# learns it at the last of its few hundred transactions, with the rent already in a buffer. So the
+# cluster is asked first: a feature is an account, absent until it is scheduled.
+SIMD_0500=B8JJXCy5amZyWG9r7EnUYLwzXSXTxG7GZ1qZ1qggo83g
+sbpf_rule="$(python3 -I - "$URL" "$SIMD_0500" <<'PY'
+import base64, json, sys, urllib.request
+url, feature = sys.argv[1:3]
+body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "getAccountInfo", "params": [feature, {"encoding": "base64", "commitment": "confirmed"}]}).encode()
+request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+answer = json.load(urllib.request.urlopen(request, timeout=120))
+if "result" not in answer:
+    sys.exit(f"the endpoint did not answer for {feature}: {answer.get('error')}")
+value = answer["result"]["value"]
+if value is None:
+    print("off")
+else:
+    # a feature account holds Option<u64>: the slot it became active at, once it has
+    print("active" if base64.b64decode(value["data"][0])[:1] == bytes([1]) else "scheduled")
+PY
+)" || exit 1
+case "$sbpf_rule" in
+  off) echo "SIMD-0500 is not active: the cluster deploys builds like these (SBPF v0)" ;;
+  scheduled) echo "WARNING: SIMD-0500 is scheduled and takes effect at the next epoch. From then on these builds (SBPF v0) cannot be deployed." ;;
+  active) echo "WARNING: SIMD-0500 is active: the cluster refuses to deploy these builds (SBPF v0). What is not on chain yet has to be rebuilt first (docs/mainnet.md)." ;;
+  *) fail "could not read whether SIMD-0500 is active" ;;
+esac
 
 say "the commits"
 [ -z "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ] || fail "this checkout has changes in no commit; a deployment is of a commit anyone can check out"
@@ -229,14 +293,15 @@ fi
 if [ "$mode" = deploy ]; then
   [ "$need" -gt 0 ] || { echo; echo "Everything named is already on chain."; rm -f "$state_file"; exit 0; }
   [ "$balance" -ge "$(( need + margin ))" ] || fail "the deployer does not hold enough for the rent and the fees"
+  [ "$sbpf_rule" != active ] || fail "SIMD-0500 is active on this cluster: it would refuse these builds at the last step of a deploy. Nothing was sent."
   rows | while IFS='|' read -r name repo prefix file id _; do
     grep -q "^$name absent " "$state_file" || continue
     so="$(so_of "$repo" "$prefix" "$file")"
-    say "deploying $name at $id"
+    say "deploying $name at $id, its writes sent $how"
     buffer="$KEYS/buffer-$name.json"
     [ -f "$buffer" ] || { solana-keygen new --no-bip39-passphrase --silent --outfile "$buffer" >/dev/null 2>&1; chmod 600 "$buffer"; }
     solana program deploy "$so" --url "$URL" --keypair "$KEYS/deployer.json" --program-id "$KEYS/$name.json" \
-      --upgrade-authority "$KEYS/deployer.json" --buffer "$buffer" --with-compute-unit-price "$CU_PRICE" --max-sign-attempts 60 --use-rpc
+      --upgrade-authority "$KEYS/deployer.json" --buffer "$buffer" --with-compute-unit-price "$CU_PRICE" --max-sign-attempts 60 ${use_rpc:+"$use_rpc"}
     # the deploy is confirmed when the tool returns; give the endpoint a minute to show it
     state=absent
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do state="$(onchain "$id")"; [ "$state" = absent ] || break; sleep 5; done

@@ -310,3 +310,12 @@ What the Token-2022 tests found, which the finisher and the claim script (milest
   The pair with real durations was deployed that day, from the builds CI makes, and the pages
   were published under `/heir/` on the vault's site ([`devnet.md`](devnet.md),
   [`program-ids.md`](program-ids.md)).
+- **2026-11-18: mainnet asked for again, still not funded.** The owner: "bring the heir up to
+  mainnet with the vault please", and, told again what the rent is, "i shouldnt have to fund
+  anything for it to just work". Somebody has to: a program is on mainnet only once it has been
+  deployed there, and its rent is paid when it is. People who open a vault pay for their own
+  vault, never for the program. The rent is a deposit while a program can still be closed, and
+  anyone can send it to the deployer's address. Until it is there nothing is on mainnet, and
+  the pages stay on devnet. What does not need it was done that day: the site's `/rpc-mainnet`
+  route, and a deploy script that sends its writes the way that worked on devnet
+  ([`mainnet.md`](mainnet.md)).
