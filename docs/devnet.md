@@ -170,5 +170,8 @@ script, so the header above only has to let that script run.
 The script fetched all eighteen files back and found each the same as the build, and the
 signer served with its own policy; the Caddyfile lines above went in the same day. In a browser,
 both pages load with no error in the console, and the heirs' page looked an address up through
-the site's `/rpc`. Nobody has yet made a vault or a plan there with a real wallet. The vault's
-own pages do not link to `/heir/` yet.
+the site's `/rpc`. Nobody has yet made a vault or a plan there with a real wallet.
+
+The vault's own pages lead here since the same day: `Heir`, in the header of each page and in the
+home page's footer (lamport-vault `a6bffc4`, whose CI build is what the vault's site now serves).
+These pages were not rebuilt for it; their hashes are the ones above.
