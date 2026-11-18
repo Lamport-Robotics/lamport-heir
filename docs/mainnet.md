@@ -16,7 +16,8 @@ The record of what is deployed is the table in [`program-ids.md`](program-ids.md
   builds that `deploy-mainnet.sh` deploys were put on a local validator with a copy of that script
   that differed only in the cluster it accepts: each landed with the hash CI printed, each answers
   at its mainnet id, and `--burn` left each without an upgrade authority. That rehearses the
-  script, not the programs: no vault was made there.
+  script, not the programs: no vault was made there. On 2026-11-18 the two ways of sending
+  (below) were rehearsed the same way, at throwaway ids.
 
 ## The programs
 
@@ -52,9 +53,17 @@ scripts/deploy-mainnet.sh --burn     # removes each program's upgrade authority.
   registry at the time of writing. The script prints the exact figures before sending anything.
   Until `--burn`, a program's rent can be had back by closing the program
   (`solana program close`), which ends that id for good. After `--burn` it never comes back.
-- Give it a provider's endpoint in `LAMPORT_MAINNET_RPC`. The script sends its writes through
-  the endpoint (`--use-rpc`), and on devnet the public endpoint let about 30 of 380 through in
-  ten minutes before the tool gave up (2026-11-17).
+- A deploy is a few hundred writes, and `LAMPORT_MAINNET_SEND` says how they are sent.
+  `validators`, the default, sends them straight to the validators, as the command-line tool
+  does by default: on devnet a program took seconds that way, where the public endpoint had let
+  about 30 of 380 writes through in ten minutes before the tool gave up (2026-11-17). `rpc`
+  sends them through the endpoint in `LAMPORT_MAINNET_RPC` (`--use-rpc`), which suits a
+  provider that forwards with stake, on a plan that allows a few hundred sends a minute; the
+  script refuses it for the public endpoint. Neither has been tried on mainnet. A deploy that
+  stops half way loses nothing: `--deploy` again carries on from its buffer, with either
+  setting.
+- An endpoint's address may carry its key. Whatever the script and the tools it runs print
+  shows the endpoint's scheme and host and nothing else of it.
 - Between `--deploy` and `--burn` the deployer wallet can still replace the programs. After
   `--burn` nobody can: a bug is then fixed only by new programs under new ids, and by people
   moving to them (`Close` and recreate, for a vault).
@@ -69,7 +78,8 @@ machine, outside every repository.
 
 `npm run build:mainnet` in `app/` builds what is served under `/heir/` for the mainnet pair, and
 `HEIR_SITE_CLUSTER=mainnet HEIR_SITE_HOST=<ssh host> tools/scripts/deploy-site.sh` publishes it
-the way [`devnet.md`](devnet.md) describes for devnet. Two things on the site come first.
+the way [`devnet.md`](devnet.md) describes for devnet. Two things on the site come first, and
+both are in place: the first since 2026-11-17, the second since 2026-11-18.
 
 The cold signer's lines in the Caddyfile, from `devnet.md`.
 
@@ -95,7 +105,9 @@ the provider's, and stays on the server:
 ```
 
 `deploy-site.sh` copies nothing for mainnet until the programs are on mainnet and
-`/rpc-mainnet` answers as mainnet.
+`/rpc-mainnet` answers as mainnet. It does answer: asked for the genesis hash with the site as
+`Origin`, it gives mainnet's, and without that header it gives 403. The pages served under
+`/heir/` are still the devnet build.
 
 ## Reminders and the finisher
 

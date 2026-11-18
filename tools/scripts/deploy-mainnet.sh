@@ -31,11 +31,40 @@
 # there too, so that a deploy the network interrupted is resumed by running --deploy again, and
 # the command-line tool has no recovery phrase to print.
 #
-# LAMPORT_MAINNET_RPC is the endpoint (default the public one, which is slow and rate-limited for
-# the few hundred transactions a deploy takes: a provider's endpoint is better).
+# LAMPORT_MAINNET_RPC is the endpoint the chain is read through (default the public one). If its
+# address carries a key, the key is never shown: everything this script and the tools it runs
+# print passes a filter that leaves the endpoint's scheme and host and nothing else of it.
+#
+# LAMPORT_MAINNET_SEND says how the few hundred writes of a deploy are sent:
+#   validators   straight to the validators, the command-line tool's own default, and the default
+#                here. On devnet, 2026-11-17, a program took seconds this way where the public
+#                endpoint had let about 30 of 380 writes through in ten minutes.
+#   rpc          through the endpoint (--use-rpc): for a provider that forwards with stake, on a
+#                plan that allows a few hundred sends a minute. Refused for the public endpoint.
+# A deploy that stops half way loses nothing: --deploy again carries on from its buffer, with
+# either setting.
 set -euo pipefail
 
-URL="${LAMPORT_MAINNET_RPC:-https://api.mainnet-beta.solana.com}"
+PUBLIC_URL=https://api.mainnet-beta.solana.com
+URL="${LAMPORT_MAINNET_RPC:-$PUBLIC_URL}"
+# all of the endpoint that is ever printed: its scheme and host
+SHOWN_URL="$(printf '%s' "$URL" | sed -E 's#^([a-z]+://[^/?]+).*$#\1#')"
+hide() {
+  HIDE_URL="$URL" HIDE_AS="$SHOWN_URL" python3 -I -u -c '
+import os, re, sys
+url, shown = os.environ["HIDE_URL"], os.environ["HIDE_AS"]
+for line in sys.stdin:
+    line = line.replace(url, shown)
+    line = re.sub(r"((?:api[-_]?key|access[-_]?token|token)=)[^&\s\")]+", r"\1<hidden>", line, flags=re.I)
+    sys.stdout.write(line)
+    sys.stdout.flush()
+'
+}
+# the script runs itself once more with everything it prints, errors included, passing that filter
+if [ -z "${LAMPORT_MAINNET_FILTERED:-}" ]; then
+  LAMPORT_MAINNET_FILTERED=1 bash "$0" "$@" 2>&1 | hide
+  exit "${PIPESTATUS[0]}"
+fi
 MAINNET_GENESIS=5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d
 KEYS="${LAMPORT_MAINNET_KEYS:-$HOME/.config/lamport/mainnet}"
 CU_PRICE="${LAMPORT_MAINNET_CU_PRICE:-20000}" # micro-lamports per compute unit, so the writes land
@@ -55,6 +84,15 @@ done
 fail() { echo "deploy-mainnet: $*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 for tool in solana solana-keygen gh python3 git; do command -v "$tool" >/dev/null 2>&1 || fail "$tool is not on PATH"; done
+SEND="${LAMPORT_MAINNET_SEND:-validators}"
+case "$SEND" in
+  validators) use_rpc=""; how="straight to the validators" ;;
+  rpc) use_rpc="--use-rpc"; how="through the endpoint" ;;
+  *) fail "LAMPORT_MAINNET_SEND is \"$SEND\": it is validators or rpc" ;;
+esac
+if [ "$SEND" = rpc ] && [ "$URL" = "$PUBLIC_URL" ]; then
+  fail "LAMPORT_MAINNET_SEND=rpc needs a provider's endpoint in LAMPORT_MAINNET_RPC: the public one lets too few writes through"
+fi
 
 # name | repository | artifact prefix | file in the artifact | program id | the devnet id the same source declares without `mainnet`
 table() {
@@ -232,11 +270,11 @@ if [ "$mode" = deploy ]; then
   rows | while IFS='|' read -r name repo prefix file id _; do
     grep -q "^$name absent " "$state_file" || continue
     so="$(so_of "$repo" "$prefix" "$file")"
-    say "deploying $name at $id"
+    say "deploying $name at $id, its writes sent $how"
     buffer="$KEYS/buffer-$name.json"
     [ -f "$buffer" ] || { solana-keygen new --no-bip39-passphrase --silent --outfile "$buffer" >/dev/null 2>&1; chmod 600 "$buffer"; }
     solana program deploy "$so" --url "$URL" --keypair "$KEYS/deployer.json" --program-id "$KEYS/$name.json" \
-      --upgrade-authority "$KEYS/deployer.json" --buffer "$buffer" --with-compute-unit-price "$CU_PRICE" --max-sign-attempts 60 --use-rpc
+      --upgrade-authority "$KEYS/deployer.json" --buffer "$buffer" --with-compute-unit-price "$CU_PRICE" --max-sign-attempts 60 ${use_rpc:+"$use_rpc"}
     # the deploy is confirmed when the tool returns; give the endpoint a minute to show it
     state=absent
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do state="$(onchain "$id")"; [ "$state" = absent ] || break; sleep 5; done
